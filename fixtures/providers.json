@@ -38,6 +38,46 @@
       "members": ["group/g1", "chan-a/orbit-2"]
     },
     {
+      "id": "g3",
+      "name": "Group Three",
+      "members": ["chan-a/orbit-2", "chan-a/falcon-9"]
+    },
+    {
+      "id": "g4",
+      "name": "Group Four",
+      "members": ["chan-a/orbit-2", "chan-a/falcon-9"]
+    },
+    {
+      "id": "g5",
+      "name": "Group Five",
+      "members": ["chan-a/orbit-2", "chan-a/falcon-9"]
+    },
+    {
+      "id": "g6",
+      "name": "Group Six",
+      "members": ["chan-a/orbit-2", "chan-a/falcon-9"]
+    },
+    {
+      "id": "g7",
+      "name": "Group Seven",
+      "members": ["chan-a/orbit-2", "chan-a/falcon-9"]
+    },
+    {
+      "id": "g8",
+      "name": "Group Eight",
+      "members": ["chan-a/orbit-2", "chan-a/falcon-9"]
+    },
+    {
+      "id": "g9",
+      "name": "Group Nine",
+      "members": ["chan-a/orbit-2", "chan-a/falcon-9"]
+    },
+    {
+      "id": "g10",
+      "name": "Group Ten",
+      "members": ["chan-a/orbit-2", "chan-a/falcon-9"]
+    },
+    {
       "id": "hidden-empty",
       "name": "Hidden Empty",
       "members": [],

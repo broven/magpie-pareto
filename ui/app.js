@@ -97,9 +97,19 @@ function renderChart(data) {
   const priced = [...points, ...officials].filter(point => !point.free && point.price.blended > 0).map(point => point.price.blended);
   let xMin = 0.01, xMax = 100;
   if (priced.length) {
-    xMin = Math.min(...priced); xMax = Math.max(...priced);
-    if (xMin === xMax) { xMin /= 2; xMax *= 2; }
-    if (data.scale === "linear") xMin = 0;
+    const dataMin = Math.min(...priced), dataMax = Math.max(...priced);
+    const low = dataMin === dataMax ? dataMin / 2 : dataMin;
+    const high = dataMin === dataMax ? dataMax * 2 : dataMax;
+    // Leave a margin at both ends so the outermost circles (and their badges) stay inside the plot.
+    if (data.scale === "linear") {
+      const pad = (high - low) * 0.05;
+      xMin = Math.max(0, low - pad);
+      xMax = high + pad;
+    } else {
+      const pad = (Math.log10(high) - Math.log10(low)) * 0.05;
+      xMin = 10 ** (Math.log10(low) - pad);
+      xMax = 10 ** (Math.log10(high) + pad);
+    }
   }
   if (data.scale === "linear" && xMax <= 0) xMax = 1;
   const x = value => data.scale === "linear"
@@ -210,7 +220,10 @@ function renderChart(data) {
       svg.append(svgEl("text", { x: px + 9, y: py + 15, class: "manual-label", fill: color }, "手动"));
     }
     if (point.groups?.length && !official) {
-      svg.append(svgEl("text", { x: px + 9, y: py + (point.manual ? 26 : 14), class: "group-label" }, point.groups.join("/")));
+      const label = point.groups.length > 2
+        ? `${point.groups.slice(0, 2).join("/")} +${point.groups.length - 2}`
+        : point.groups.join("/");
+      svg.append(svgEl("text", { x: px + 9, y: py + (point.manual ? 26 : 14), class: "group-label" }, label));
     }
   };
 

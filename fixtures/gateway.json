@@ -1,0 +1,128 @@
+{
+  "data": [
+    {
+      "id": "chan-a/falcon-9",
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.00001",
+        "input_cache_read": "0.0000002",
+        "input_cache_write": "0.0000025"
+      },
+      "reasoning_levels": ["low", "high", "max"]
+    },
+    {
+      "id": "chan-a/falcon-9-preview",
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.00001",
+        "input_cache_read": "0.0000002",
+        "input_cache_write": "0.0000025"
+      },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "chan-a/orbit-2-preview",
+      "pricing": {
+        "prompt": "0.000003",
+        "completion": "0.000012",
+        "input_cache_read": "0.0000003",
+        "input_cache_write": "0.000003"
+      },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "chan-a/alias-model",
+      "pricing": {
+        "prompt": "0.000001",
+        "completion": "0.000001",
+        "input_cache_read": "0.000001",
+        "input_cache_write": "0.000001"
+      },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "chan-a/loner-1",
+      "pricing": {
+        "prompt": "0.000001",
+        "completion": "0.000002",
+        "input_cache_read": "0.0000001",
+        "input_cache_write": "0.0000002"
+      },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "chan-a/free-bee",
+      "pricing": { "prompt": "0", "completion": "0" },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "chan-a/falcon-8",
+      "pricing": {
+        "prompt": "0.0000005",
+        "completion": "0.000002",
+        "input_cache_read": "0.00000005",
+        "input_cache_write": "0.0000005"
+      },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "chan-a/orbit-1",
+      "pricing": {
+        "prompt": "0.00001",
+        "completion": "0.00004",
+        "input_cache_read": "0.000001",
+        "input_cache_write": "0.00001"
+      },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "chan-a/orbit-2",
+      "pricing": {
+        "prompt": "0.000003",
+        "completion": "0.000012",
+        "input_cache_read": "0.0000003",
+        "input_cache_write": "0.000003"
+      },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "chan-a/falcon-9-mini",
+      "pricing": {
+        "prompt": "0.000001",
+        "completion": "0.000004",
+        "input_cache_read": "0.0000001",
+        "input_cache_write": "0.000001"
+      },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "chan-a/no-price",
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "chan-b/falcon-9",
+      "pricing": { "prompt": "0.000002", "completion": "0.00001" },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "chan-b/mystery-7",
+      "pricing": {
+        "prompt": "0.000002",
+        "completion": "0.000008",
+        "input_cache_read": "0.0000002",
+        "input_cache_write": "0.000002"
+      },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "group/g1",
+      "pricing": { "prompt": "0.000002", "completion": "0.00001" },
+      "reasoning_levels": ["high"]
+    },
+    {
+      "id": "auto/falcon-9",
+      "pricing": { "prompt": "0.000002", "completion": "0.00001" },
+      "reasoning_levels": ["high"]
+    }
+  ]
+}

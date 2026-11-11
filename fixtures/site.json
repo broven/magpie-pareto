@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "generatedAt": "2026-11-10",
+  "boards": {
+    "aa_intelligence_index": { "name": "Board A", "metric": "Index", "url": "https://example.invalid/a", "snapshot": "2026-10-01" },
+    "aa_coding_agent_index": { "name": "Board B", "metric": "Index", "url": "https://example.invalid/b", "snapshot": "2026-10-01" },
+    "arena_code": { "name": "Board C", "metric": "Arena Score", "url": "https://example.invalid/c", "snapshot": "2026-10-19" },
+    "arena_agent_mode": { "name": "Board D", "metric": "Net Improvement %", "url": "https://example.invalid/d", "snapshot": "2026-10-19" },
+    "open_design_arena": { "name": "Board E", "metric": "Average task score", "url": "https://example.invalid/e", "snapshot": "2026-10-01" },
+    "terminal_bench_4": { "name": "Board F", "metric": "Resolution Rate %", "url": "https://example.invalid/f", "snapshot": "2026-10-06" },
+    "aa_terminal_bench_4": { "name": "Board G", "metric": "Resolution Rate %", "url": "https://example.invalid/g", "snapshot": "2026-10-01" },
+    "deepswe_1_1": { "name": "Board H", "metric": "Pass@1 %", "url": "https://example.invalid/h", "snapshot": "2026-09-22" }
+  },
+  "configurations": [
+    { "board": "aa_intelligence_index", "model": "falcon-9", "reasoning_effort": "low", "agent_harness": "H1", "score": 50 },
+    { "board": "aa_intelligence_index", "model": "falcon-9", "reasoning_effort": "low", "agent_harness": "H2", "score": 55 },
+    { "board": "aa_intelligence_index", "model": "falcon-9", "reasoning_effort": "high", "agent_harness": "H1", "score": 60 },
+    { "board": "aa_intelligence_index", "model": "falcon-9", "reasoning_effort": "high", "agent_harness": "H2", "score": 65 },
+    { "board": "aa_intelligence_index", "model": "falcon-9", "reasoning_effort": "max", "agent_harness": "H1", "score": 70 },
+    { "board": "aa_intelligence_index", "model": "falcon-8", "reasoning_effort": "high", "agent_harness": "H1", "score": 40 },
+    { "board": "aa_intelligence_index", "model": "orbit-2", "reasoning_effort": "high", "agent_harness": "H1", "score": 80 },
+    { "board": "aa_intelligence_index", "model": "orbit-1", "reasoning_effort": "high", "agent_harness": "H1", "score": 30 },
+    { "board": "aa_intelligence_index", "model": "free-bee", "reasoning_effort": "high", "agent_harness": "H1", "score": 20 },
+    { "board": "aa_intelligence_index", "model": "falcon-9-mini", "reasoning_effort": "high", "agent_harness": "H1", "score": 45 },
+    { "board": "terminal_bench_4", "model": "falcon-9", "reasoning_effort": null, "agent_harness": "H1", "score": 30 }
+  ],
+  "points": [
+    {
+      "plan_id": "fake_plan_peak",
+      "plan": "Fake Plan Peak",
+      "model": "falcon-9",
+      "price_usd": 20,
+      "monthly_tokens": 100000000,
+      "list_blended_usd_per_mtok": 2.0,
+      "confidence": "high",
+      "currency": "USD",
+      "unmetered": false
+    },
+    {
+      "plan_id": "fake_plan_peak",
+      "plan": "Fake Plan Peak",
+      "model": "falcon-9-mini",
+      "price_usd": 20,
+      "monthly_tokens": 50000000,
+      "list_blended_usd_per_mtok": 1.0,
+      "confidence": "high",
+      "currency": "USD",
+      "unmetered": false
+    },
+    {
+      "plan_id": "fake_plan_mid",
+      "plan": "Fake Plan Mid",
+      "model": "falcon-9",
+      "price_usd": 20,
+      "monthly_tokens": 50000000,
+      "list_blended_usd_per_mtok": 2.0,
+      "confidence": "medium",
+      "currency": "USD",
+      "unmetered": false
+    },
+    {
+      "plan_id": "fake_plan_offpeak",
+      "plan": "Fake Plan Offpeak",
+      "model": "falcon-9",
+      "price_usd": 10,
+      "monthly_tokens": 100000000,
+      "list_blended_usd_per_mtok": 2.0,
+      "confidence": "low",
+      "currency": "USD",
+      "unmetered": false
+    }
+  ]
+}

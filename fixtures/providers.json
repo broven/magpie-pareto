@@ -1,0 +1,47 @@
+{
+  "providers": [
+    {
+      "id": "chan-a",
+      "name": "Chan A",
+      "key": "sk-test-a",
+      "chat": "https://chan-a.example/v1",
+      "models": [
+        "falcon-9",
+        "falcon-9-preview",
+        "orbit-2-preview",
+        "alias-model",
+        "loner-1",
+        "free-bee",
+        "falcon-8",
+        "orbit-1",
+        "orbit-2",
+        "falcon-9-mini"
+      ]
+    },
+    {
+      "id": "chan-b",
+      "name": "Chan B",
+      "key": "sk-test-b",
+      "chat": "https://chan-b.example/v1",
+      "models": ["falcon-9", "mystery-7"]
+    }
+  ],
+  "groups": [
+    {
+      "id": "g1",
+      "name": "Group One",
+      "members": ["chan-a/falcon-9", "chan-b/falcon-9"]
+    },
+    {
+      "id": "g2",
+      "name": "Group Two",
+      "members": ["group/g1", "chan-a/orbit-2"]
+    },
+    {
+      "id": "hidden-empty",
+      "name": "Hidden Empty",
+      "members": [],
+      "hidden": true
+    }
+  ]
+}

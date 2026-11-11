@@ -1,0 +1,33 @@
+{
+  "name": "magpie-pareto",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "index.js",
+  "keywords": [
+    "magpie-plugin"
+  ],
+  "scripts": {
+    "start": "bun src/server.ts",
+    "e2e": "bun scripts/e2e.ts",
+    "ui-shot": "bun scripts/ui-shot.ts",
+    "frame-check": "bun scripts/frame-check.ts"
+  },
+  "magpie": {
+    "page": {
+      "title": "Pareto",
+      "titles": {
+        "zh": "性价比图"
+      },
+      "file": "page/index.html",
+      "icon": "page/icon.svg",
+      "service": {
+        "port": 3498,
+        "option": "port"
+      }
+    },
+    "options": {
+      "port": 3498
+    }
+  }
+}

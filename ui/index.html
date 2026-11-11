@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pareto · 性价比图</title>
+<link rel="stylesheet" href="ui/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Pareto <span>性价比图</span></h1>
+    <p class="sub">横轴是你能拿到的渠道合成价，纵轴是模型能力分。按任务给路由组挑模型和 effort；最优解自己看。</p>
+  </header>
+
+  <section class="panel" id="controls">
+    <div class="row">
+      <label>榜单 <select id="board-select" data-testid="board-select"></select></label>
+      <label>画像 <select id="profile-select" data-testid="profile-select"></select></label>
+      <label>刻度 <select id="scale-select" data-testid="scale-select">
+        <option value="log">对数</option>
+        <option value="linear">线性</option>
+      </select></label>
+      <label>路由组 <select id="group-filter" data-testid="group-filter"><option value="">全部</option></select></label>
+      <label class="check"><input type="checkbox" id="show-old" data-testid="show-old"> 显示全部旧代</label>
+      <button id="refresh-button" data-testid="refresh-button" type="button" class="secondary">刷新数据</button>
+    </div>
+    <div class="row meta-row">
+      <span id="board-meta" class="muted"></span>
+      <span id="cache-dates" class="muted" data-testid="cache-dates"></span>
+    </div>
+    <p id="warnings" class="warn" hidden></p>
+  </section>
+
+  <section class="panel" id="chart-panel">
+    <div class="chart-head">
+      <h2>价格 × 能力</h2>
+      <div id="legend" class="legend"></div>
+    </div>
+    <div id="chart-wrap" class="chart-wrap">
+      <svg id="chart" data-testid="chart-svg" viewBox="0 0 1000 560" role="img" aria-label="模型价格与能力散点图"></svg>
+      <div id="tooltip" data-testid="chart-tooltip" class="tooltip" hidden></div>
+    </div>
+    <div id="no-score" class="no-score" data-testid="no-score-band">
+      <span class="no-score-title">无分数（有价格，但当前榜单没有分；点一下手动打分）</span>
+      <div id="no-score-list" class="no-score-list"></div>
+    </div>
+    <p class="hint muted">实线：同一模型同一 effort 跨渠道；虚线：同一渠道不同 effort。空心点：官方价参照。虚线描边：存疑。徽标：所在路由组。</p>
+  </section>
+
+  <section class="panel" id="point-actions" data-testid="point-actions" hidden>
+    <h2 id="point-title">点操作</h2>
+    <div id="point-menu" class="point-menu"></div>
+  </section>
+
+  <section class="panel" id="subscription-panel" data-testid="subscription-panel">
+    <h2>订阅计算器</h2>
+    <p class="muted">按渠道保存订阅输入；预览每个模型的新旧四项价格，确认后逐条写回 magpie。</p>
+    <div class="row">
+      <label>渠道 <select id="sub-provider" data-testid="sub-provider"></select></label>
+      <label>口径 <select id="sub-mode" data-testid="sub-mode">
+        <option value="usd">等值美元</option>
+        <option value="tokens">token 额度</option>
+        <option value="requests">每时间窗请求数</option>
+        <option value="credits">积分 × 每模型倍率</option>
+      </select></label>
+    </div>
+    <div id="sub-inputs" class="sub-inputs"></div>
+    <div class="row">
+      <label>套餐前缀 <input id="plan-prefix" data-testid="plan-prefix" type="text" placeholder="例如 chatgpt_pro"></label>
+      <label>套餐 <select id="plan-select" data-testid="plan-select"></select></label>
+      <label>场景 <select id="plan-scenario" data-testid="plan-scenario"></select></label>
+    </div>
+    <div class="row">
+      <button id="sub-preview" data-testid="sub-preview" type="button" class="primary">预览价格 diff</button>
+      <button id="sub-apply" data-testid="sub-apply" type="button" disabled>重算并写回</button>
+    </div>
+    <p id="sub-status" class="muted"></p>
+    <p id="sub-warnings" class="warn" hidden></p>
+    <div id="sub-diff" class="table-wrap"></div>
+    <pre id="sub-commands" class="commands" data-testid="sub-commands" hidden></pre>
+  </section>
+
+  <section class="panel" id="settings-panel">
+    <h2>设置与匹配</h2>
+    <div class="row">
+      <label>LLM 匹配模型或组 <input id="llm-model" data-testid="llm-model" type="text" placeholder="例如 group/light；留空跳过 LLM"></label>
+      <button id="llm-save" data-testid="llm-save" type="button">保存</button>
+    </div>
+    <p id="settings-status" class="muted"></p>
+    <div id="llm-matches"></div>
+  </section>
+
+  <footer class="foot">
+    <p>数据源：real-api-pricing（MIT）· Artificial Analysis（AA 系列榜单）· Epoch AI（CC-BY 4.0）· models.dev</p>
+    <p id="attribution" data-testid="attribution"></p>
+  </footer>
+</div>
+<script src="ui/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "chan-a",
+    "name": "Chan A",
+    "models": [
+      { "id": "falcon-9", "free": false },
+      { "id": "free-bee", "free": true }
+    ]
+  },
+  {
+    "id": "chan-b",
+    "name": "Chan B",
+    "models": [
+      { "id": "falcon-9", "free": false },
+      { "id": "mystery-7", "free": false }
+    ]
+  }
+]

@@ -14,7 +14,9 @@ export function normalizeModelId(id: string): string {
   value = value.replace(/[-_](?:19|20)\d{6}$/g, "");
   value = value.replace(/[-_]\d{4}$/g, "");
   // Release markers that say nothing about the model itself.
-  for (const marker of ["preview", "experimental", "exp", "beta", "alpha", "latest", "new", "rc"]) {
+  // "free" is a channel's label for a free tier of the same model
+  // (deepseek-v4.1-flash-free), not part of the model's identity.
+  for (const marker of ["free", "preview", "experimental", "exp", "beta", "alpha", "latest", "new", "rc"]) {
     value = value.replace(new RegExp(`[-_]${marker}\\d*$`, "g"), "");
   }
   value = value.replace(/[^a-z0-9.-]+/g, "-");

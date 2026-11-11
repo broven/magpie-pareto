@@ -216,20 +216,41 @@ export interface EffortPoint {
   harness: string;
 }
 
-export function pointsForEntry(entry: BoardEntry, reasoningLevels: string[]): EffortPoint[] {
+// One point per (channel, model): take the best score the board has for an
+// effort this channel actually supports. A channel without reasoning levels,
+// or a board with no effort dimension, falls back to the model's best score.
+export function scoreForEntry(entry: BoardEntry, reasoningLevels: string[]): EffortPoint | null {
   const effortKeys = [...entry.scores.keys()].filter(key => key !== "");
   if (!effortKeys.length) {
     const def = entry.scores.get("");
-    return def ? [{ effort: "默认", effortKey: "", score: def.score, harness: def.harness }] : [];
+    return def ? { effort: "默认", effortKey: "", score: def.score, harness: def.harness } : null;
   }
-  const levels = reasoningLevels.length ? reasoningLevels : ["默认"];
-  const points: EffortPoint[] = [];
-  for (const level of levels) {
-    const key = alignEffort(level) ?? "";
-    const score = entry.scores.get(key);
-    if (score) points.push({ effort: level, effortKey: key, score: score.score, harness: score.harness });
+  const supported = new Map<string, string>();
+  for (const level of reasoningLevels) {
+    const key = alignEffort(level);
+    if (key && !supported.has(key)) supported.set(key, level);
   }
-  return points;
+  let best: EffortPoint | null = null;
+  for (const [key, score] of entry.scores) {
+    if (!key) continue;
+    if (supported.size && !supported.has(key)) continue;
+    if (!best || score.score > best.score) {
+      best = { effort: supported.get(key) ?? key, effortKey: key, score: score.score, harness: score.harness };
+    }
+  }
+  return best;
+}
+
+// The board's highest score for the model, across every effort and harness.
+// Used for the official-price reference point.
+export function topScoreForEntry(entry: BoardEntry): EffortPoint | null {
+  let best: EffortPoint | null = null;
+  for (const [key, score] of entry.scores) {
+    if (!best || score.score > best.score) {
+      best = { effort: key || "默认", effortKey: key, score: score.score, harness: score.harness };
+    }
+  }
+  return best;
 }
 
 export function resolveEntry(index: BoardIndex, match: MatchOutcome): BoardEntry | null {

@@ -62,6 +62,10 @@ function pointOf(data: any, provider: string, model: string, effort: string) {
   return data.points.find((point: any) => point.provider === provider && point.model === model && point.effort === effort);
 }
 
+function pointOfModel(data: any, provider: string, model: string) {
+  return data.points.find((point: any) => point.provider === provider && point.model === model);
+}
+
 const near = (a: number, b: number, epsilon = 1e-9) => Math.abs(a - b) <= epsilon;
 
 try {
@@ -84,9 +88,9 @@ try {
   // 2: hand-calculated blended prices under all / group:g1 / 3:1.
   const cAll = await chart({ board: "aa_intelligence_index", profile: "all" });
   const cFixed = await chart({ board: "aa_intelligence_index", profile: "fixed:3:1" });
-  const g1 = pointOf(c1, "chan-a", "falcon-9", "high");
-  const all = pointOf(cAll, "chan-a", "falcon-9", "high");
-  const fixed = pointOf(cFixed, "chan-a", "falcon-9", "high");
+  const g1 = pointOfModel(c1, "chan-a", "falcon-9");
+  const all = pointOfModel(cAll, "chan-a", "falcon-9");
+  const fixed = pointOfModel(cFixed, "chan-a", "falcon-9");
   assert.ok(g1 && all && fixed);
   const expectedG1 = 0.1 * 2 + 0.05 * 10 + 0.8 * 0.2 + 0.05 * 2.5;
   const expectedAll = (500 / 2350) * 2 + (150 / 2350) * 10 + (1600 / 2350) * 0.2 + (100 / 2350) * 2.5;
@@ -115,32 +119,48 @@ try {
   assert.equal(c1.freeColumn, true);
   check("4 free point in the free column", { model: "free-bee", blended: free.price.blended });
 
-  // 5: links and effort support.
-  const horizontal = c1.links.find((link: any) => link.kind === "horizontal" && link.modelKey === "falcon-9" && link.effort === "high");
-  assert.ok(horizontal, "falcon-9 high must link across channels");
+  // 5: one point per (channel, model); cross-channel solid link; an effort the
+  // channel does not support never contributes to the score.
+  const seenPoint = new Set<string>();
+  for (const point of c1.points) {
+    const key = `${point.provider}/${point.model}`;
+    assert.ok(!seenPoint.has(key), `${key} must have exactly one point`);
+    seenPoint.add(key);
+  }
+  assert.ok(c1.points.every((point: any) => !String(point.id).includes("::")), "point ids carry no effort suffix");
+  assert.ok(!c1.links.some((link: any) => link.kind === "vertical"), "no per-effort vertical links");
+  const horizontal = c1.links.find((link: any) => link.kind === "horizontal" && link.modelKey === "falcon-9");
+  assert.ok(horizontal, "falcon-9 must link across channels");
   const linkedProviders = new Set(horizontal.points.map((point: any) => point.provider));
   assert.ok(linkedProviders.has("chan-a") && linkedProviders.has("chan-b"));
-  const vertical = c1.links.find((link: any) => link.kind === "vertical" && link.provider === "chan-a" && link.model === "falcon-9");
-  assert.ok(vertical, "chan-a/falcon-9 must link its efforts");
-  assert.deepEqual([...new Set(vertical.points.map((point: any) => point.effort))].sort(), ["high", "low", "max"]);
-  const chanBPoints = c1.points.filter((point: any) => point.provider === "chan-b" && point.model === "falcon-9");
-  assert.deepEqual(chanBPoints.map((point: any) => point.effort), ["high"]);
-  assert.ok(!pointOf(c1, "chan-b", "falcon-9", "low"));
-  assert.ok(!pointOf(c1, "chan-b", "falcon-9", "max"));
-  check("5 horizontal solid link, vertical dashed link, only channel-supported efforts", {
-    horizontal: horizontal.points.length, vertical: vertical.points.length, chanB: chanBPoints.length,
+  const chanAFalcon = pointOfModel(c1, "chan-a", "falcon-9");
+  const chanBFalcon = pointOfModel(c1, "chan-b", "falcon-9");
+  assert.ok(chanAFalcon && chanBFalcon);
+  // chan-a supports low/high/max: the max score wins.
+  assert.equal(chanAFalcon.effort, "max");
+  assert.equal(chanAFalcon.score, 70);
+  // chan-b only supports high, so its score comes from the high tier (65), not max (70).
+  assert.equal(chanBFalcon.effort, "high");
+  assert.equal(chanBFalcon.score, 65);
+  assert.equal(c1.points.filter((point: any) => point.provider === "chan-b" && point.model === "falcon-9").length, 1);
+  check("5 one point per (channel, model); cross-channel solid link; channel without max scores at high", {
+    chanA: `${chanAFalcon.effort}/${chanAFalcon.score}`, chanB: `${chanBFalcon.effort}/${chanBFalcon.score}`,
+    horizontal: horizontal.points.length, vertical: c1.links.filter((link: any) => link.kind === "vertical").length,
   });
 
-  // 6: official hollow points.
-  const official = c1.officialPoints.find((point: any) => point.modelKey === "falcon-9" && point.effort === "high");
-  assert.ok(official, "official falcon-9 high reference must exist");
+  // 6: one official hollow point per model, scored at the board's highest value.
+  const official = c1.officialPoints.find((point: any) => point.modelKey === "falcon-9");
+  assert.ok(official, "official falcon-9 reference must exist");
   assert.equal(official.official, true);
+  assert.equal(official.effort, "max");
+  assert.equal(official.score, 70);
+  assert.equal(c1.officialPoints.filter((point: any) => point.modelKey === "falcon-9").length, 1);
   const expectedOfficial = 0.1 * 4 + 0.05 * 20 + 0.8 * 0.5 + 0.05 * 4;
   assert.ok(near(official.price.blended, expectedOfficial), `${official.price.blended} != ${expectedOfficial}`);
-  check("6 official hollow reference point", { official: official.price.blended });
+  check("6 one official hollow reference point per model at the top board score", { official: official.price.blended, effort: official.effort });
 
   // 7: series, latest-generation filtering, cheap-old exception, allOld switch.
-  const falcon9 = pointOf(c1, "chan-a", "falcon-9", "high");
+  const falcon9 = pointOfModel(c1, "chan-a", "falcon-9");
   const falcon8 = pointOf(c1, "chan-a", "falcon-8", "high");
   assert.ok(falcon9 && falcon8);
   assert.equal(falcon8.series, falcon9.series, "falcon-8 and falcon-9 share the series key");
@@ -197,13 +217,11 @@ try {
   // 10: suspect factor scales the score.
   await post("/api/state/suspect", { provider: "chan-a", model: "falcon-9", suspect: true, factor: 0.8 });
   const cSuspect = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
-  const suspectHigh = pointOf(cSuspect, "chan-a", "falcon-9", "high");
-  const suspectLow = pointOf(cSuspect, "chan-a", "falcon-9", "low");
-  assert.ok(suspectHigh && suspectLow);
-  assert.equal(suspectHigh.suspect, true);
-  assert.ok(near(suspectHigh.score, 65 * 0.8));
-  assert.ok(near(suspectLow.score, 55 * 0.8));
-  check("10 suspect factor", { high: suspectHigh.score, low: suspectLow.score });
+  const suspectTop = pointOfModel(cSuspect, "chan-a", "falcon-9");
+  assert.ok(suspectTop);
+  assert.equal(suspectTop.suspect, true);
+  assert.ok(near(suspectTop.score, 70 * 0.8));
+  check("10 suspect factor", { score: suspectTop.score, effort: suspectTop.effort });
 
   // 11: four quota modes and RAP prefill with per-model discounts.
   const profile = "group:g1";
@@ -317,9 +335,11 @@ try {
   assert.ok(eciPoint, "ECI has no effort dimension and draws a default point");
   assert.equal(eciPoint.score, 150);
   const swe = await chart({ board: "epoch_swe", profile: "group:g1" });
-  assert.equal(pointOf(swe, "chan-a", "falcon-9", "high")?.score, 65);
-  assert.equal(pointOf(swe, "chan-a", "falcon-9", "max")?.score, 70);
-  check("14 Epoch ECI and SWE boards", { eci: eciPoint.score, sweHigh: 65, sweMax: 70 });
+  const sweFalcon = pointOfModel(swe, "chan-a", "falcon-9");
+  assert.ok(sweFalcon);
+  assert.equal(sweFalcon.effort, "max");
+  assert.equal(sweFalcon.score, 70);
+  check("14 Epoch ECI and SWE boards", { eci: eciPoint.score, sweEffort: sweFalcon.effort, sweScore: sweFalcon.score });
 
   artifact.status = "PASS";
   console.log("E2E PASS");

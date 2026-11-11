@@ -79,7 +79,6 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 #chart .point.hl { stroke-width: 3; }
 #chart .official { fill: none; }
 #chart .link-h { stroke-width: 1.5; opacity: .45; }
-#chart .link-v { stroke-width: 1.2; stroke-dasharray: 4 3; opacity: .5; }
 #chart .old-label, #chart .manual-label, #chart .group-label { font-size: 9px; }
 #chart .group-label { fill: var(--muted); }
 #chart .free-title { font-size: 11px; fill: var(--muted); }

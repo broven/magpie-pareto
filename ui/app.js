@@ -163,23 +163,19 @@ function renderChart(data) {
   svg.append(svgEl("text", { x: 18, y: (plotTop + plotBottom) / 2, "text-anchor": "middle", class: "axis-title", transform: `rotate(-90 18 ${(plotTop + plotBottom) / 2})` },
     data.board ? `${data.board.name} · ${data.board.metric}` : "能力分"));
 
-  // Links first, under the points.
+  // Links first, under the points. One point per (channel, model), so links
+  // only join the same model across channels.
   for (const link of data.links ?? []) {
+    if (link.kind !== "horizontal") continue;
     const color = colorFor(link.modelKey);
-    if (link.kind === "horizontal") {
-      const list = [...link.points].sort((a, b) => a.price - b.price);
-      for (let i = 1; i < list.length; i++) {
-        const a = list[i - 1], b = list[i];
+    const list = [...link.points].sort((a, b) => a.price - b.price);
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i], b = list[j];
+        if (a.provider === b.provider) continue;
         const ax = a.price > 0 ? x(a.price) : freeX;
         const bx = b.price > 0 ? x(b.price) : freeX;
         svg.append(svgEl("line", { x1: ax, y1: y(a.score), x2: bx, y2: y(b.score), stroke: color, class: "link-h" }));
-      }
-    } else {
-      const list = [...link.points].sort((a, b) => a.score - b.score);
-      for (let i = 1; i < list.length; i++) {
-        const a = list[i - 1], b = list[i];
-        const xx = a.price > 0 ? x(a.price) : freeX;
-        svg.append(svgEl("line", { x1: xx, y1: y(a.score), x2: xx, y2: y(b.score), stroke: color, class: "link-v" }));
       }
     }
   }

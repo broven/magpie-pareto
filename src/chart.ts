@@ -11,7 +11,7 @@ import {
   type Price,
 } from "./datasources";
 import { normalizeModelId, seriesKey } from "./normalize";
-import { buildBoardIndex, boardList, makeLlmClient, matchModel, pointsForEntry, resolveEntry, type BoardIndex, type MatchOutcome } from "./matching";
+import { buildBoardIndex, boardList, makeLlmClient, matchModel, resolveEntry, scoreForEntry, topScoreForEntry, type BoardIndex, type MatchOutcome } from "./matching";
 import { readJson, round } from "./util";
 import { blendPrice, listProfiles, providerAverage, resolveProfile, summarizeUsage, type ProfileInfo, type UsageSummary } from "./usage";
 import { readState, writeState, type AliasEntry, type ParetoState } from "./state";
@@ -62,7 +62,7 @@ export interface NoScorePoint {
 }
 
 export interface ChartLink {
-  kind: "horizontal" | "vertical";
+  kind: "horizontal";
   modelKey: string;
   model: string;
   effort?: string;
@@ -175,8 +175,8 @@ function oldGenFilter(
   }
 }
 
-function pointId(provider: string, model: string, effortKey: string): string {
-  return `${provider}/${model}::${effortKey || "default"}`;
+function pointId(provider: string, model: string): string {
+  return `${provider}/${model}`;
 }
 
 function priceWithBlend(price: Price, vector: { input: number; output: number; cache_read: number; cache_write: number }): Price & { blended: number } {
@@ -254,12 +254,12 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
     if (index && match) {
       const entry = resolveEntry(index, match);
       if (entry) {
-        const effortPoints = pointsForEntry(entry, gateway.reasoningLevels);
-        for (const effortPoint of effortPoints) {
+        const effortPoint = scoreForEntry(entry, gateway.reasoningLevels);
+        if (effortPoint) {
           const adjusted = applySuspect(effortPoint.score, state, gateway.provider, gateway.model);
           points.push({
             ...base,
-            id: pointId(gateway.provider, gateway.model, effortPoint.effortKey),
+            id: pointId(gateway.provider, gateway.model),
             effort: effortPoint.effort,
             effortKey: effortPoint.effortKey,
             score: adjusted.score,
@@ -273,32 +273,34 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
             official: false,
           });
           made = true;
-          const officialKey = `${normalizeModelId(official?.id ?? "")}|${effortPoint.effortKey}`;
-          if (official?.cost) {
-            const candidate: ChartPoint = {
-              ...base,
-              id: `official::${officialKey}`,
-              modelKey: modelId,
-              series,
-              effort: effortPoint.effort,
-              effortKey: effortPoint.effortKey,
-              price: priceWithBlend(official.cost, vector),
-              free: false,
-              score: adjusted.score,
-              scoreSource: index.name,
-              harness: effortPoint.harness,
-              matchedModel: match.model,
-              match: { kind: match.kind, confirmed: match.confirmed },
-              suspect: false,
-              suspectFactor: 1,
-              manual: false,
-              official: true,
-            };
-            const existing = officialSeen.get(officialKey);
-            // Two magpie ids can map to one official model (a preview alias);
-            // the reference point should carry the best score seen for it.
-            if (!existing || candidate.score > existing.score) officialSeen.set(officialKey, candidate);
-          }
+        }
+        const top = topScoreForEntry(entry);
+        const officialId = normalizeModelId(official?.id ?? "");
+        if (official?.cost && top) {
+          const officialKey = officialId;
+          const candidate: ChartPoint = {
+            ...base,
+            id: `official::${officialKey}`,
+            modelKey: modelId,
+            series,
+            effort: top.effort,
+            effortKey: top.effortKey,
+            price: priceWithBlend(official.cost, vector),
+            free: false,
+            score: top.score,
+            scoreSource: index.name,
+            harness: top.harness,
+            matchedModel: match.model,
+            match: { kind: match.kind, confirmed: match.confirmed },
+            suspect: false,
+            suspectFactor: 1,
+            manual: false,
+            official: true,
+          };
+          const existing = officialSeen.get(officialKey);
+          // Two magpie ids can map to one official model (a preview alias);
+          // the reference point carries the highest board score for it.
+          if (!existing || candidate.score > existing.score) officialSeen.set(officialKey, candidate);
         }
       }
     }
@@ -307,7 +309,7 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
       if (manual !== undefined && Number.isFinite(manual)) {
         points.push({
           ...base,
-          id: pointId(gateway.provider, gateway.model, ""),
+          id: pointId(gateway.provider, gateway.model),
           effort: "默认",
           effortKey: "",
           score: manual,
@@ -349,21 +351,15 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
   const officialPoints = [...officialSeen.values()].filter(point => keepOf(point.provider, point.model));
   const officialKept = officialPoints.filter(point => {
     // Keep a reference only when at least one channel point of the same model
-    // and effort survived the filters.
-    return keptPoints.some(channel => channel.modelKey === point.modelKey && channel.effortKey === point.effortKey);
+    // survived the filters.
+    return keptPoints.some(channel => channel.modelKey === point.modelKey);
   });
 
   const horizontal = new Map<string, ChartPoint[]>();
-  const vertical = new Map<string, ChartPoint[]>();
   for (const point of keptPoints) {
-    const hKey = `${point.modelKey}|${point.effortKey}`;
-    const h = horizontal.get(hKey) ?? [];
+    const h = horizontal.get(point.modelKey) ?? [];
     h.push(point);
-    horizontal.set(hKey, h);
-    const vKey = `${point.provider}/${point.model}`;
-    const v = vertical.get(vKey) ?? [];
-    v.push(point);
-    vertical.set(vKey, v);
+    horizontal.set(point.modelKey, h);
   }
   const links: ChartLink[] = [];
   for (const list of horizontal.values()) {
@@ -373,18 +369,6 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
       kind: "horizontal",
       modelKey: list[0].modelKey,
       model: list[0].model,
-      effort: list[0].effort,
-      points: list.map(point => ({ provider: point.provider, model: point.model, effort: point.effort, price: point.price.blended, score: point.score })),
-    });
-  }
-  for (const list of vertical.values()) {
-    const efforts = new Set(list.map(point => point.effortKey));
-    if (efforts.size < 2) continue;
-    links.push({
-      kind: "vertical",
-      modelKey: list[0].modelKey,
-      model: list[0].model,
-      provider: list[0].provider,
       points: list.map(point => ({ provider: point.provider, model: point.model, effort: point.effort, price: point.price.blended, score: point.score })),
     });
   }

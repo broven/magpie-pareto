@@ -12,7 +12,7 @@ magpie plugin add github:broven/magpie-pareto
 
 ## 它做什么
 
-- **价格**：取本机 gateway `/v1/models` 返回的生效价，也就是叠加了你在 magpie 里设的价格、插件价和峰谷价之后的结果。input、output、cache 各项按「负载画像」加权，合成一个数。画像可选全部、某个路由组、某个 agent，数据取自最近 30 天的 `usage.jsonl`；也可以改用 3:1、只看 input、只看 output 这几种固定口径。横轴默认用对数刻度，免费模型单独放在最左边一列。
+- **价格**：取本机 gateway `/v1/models` 返回的生效价，也就是叠加了你在 magpie 里设的价格、插件价和峰谷价之后的结果。input、output、cache 各项按「负载画像」加权，合成一个数。画像可选全部、某个路由组、某个 agent，数据取自最近 30 天的 `usage.jsonl`；也可以改用 3:1、只看 input、只看 output 这几种固定口径。横轴默认用对数刻度，免费模型单独放在最左边一列。送免费额度、按倍率消耗额度的渠道（例如 workbuddy）在 magpie 里通常定价为 0，会落进这一列；列内按「额度倍率」横向排开（0x 在最左，列内最大倍率在最右，未填倍率的最右并标「倍率未知」），在点的操作面板里可以填写或清空倍率。
 - **能力**：可选的榜单有：
   - [real-api-pricing](https://github.com/Fei2411/real-api-pricing) 收录的 8 个榜单：AA Intelligence、AA Coding Agent、Terminal-Bench 4.0、DeepSWE、Code Arena 等
   - Epoch AI 的 ECI 和 SWE-bench Verified

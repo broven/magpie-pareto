@@ -125,6 +125,11 @@
       "reasoning_levels": ["high"]
     },
     {
+      "id": "grant-chan/free-bee",
+      "pricing": { "prompt": "0", "completion": "0" },
+      "reasoning_levels": ["high"]
+    },
+    {
       "id": "group/g1",
       "pricing": { "prompt": "0.000002", "completion": "0.00001" },
       "reasoning_levels": ["high"]

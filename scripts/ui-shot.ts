@@ -32,6 +32,16 @@ async function noHorizontalScroll(page: any, width: number) {
 }
 
 const stack = await startFixtureStack();
+// Give the two free fixture points different quota multipliers so the free
+// column's horizontal mini-axis is visible in the screenshots.
+for (const [provider, multiplier] of [["chan-a", 0], ["grant-chan", 1.5]] as const) {
+  const response = await fetch(stack.base + "/api/state/quota-multiplier", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-pareto-token": stack.token },
+    body: JSON.stringify({ provider, model: "free-bee", multiplier }),
+  });
+  if (!response.ok) throw new Error(`quota multiplier setup failed: HTTP ${response.status}`);
+}
 let browser: any;
 try {
   browser = await launch();

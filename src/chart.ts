@@ -15,7 +15,7 @@ import { normalizeModelId, seriesKey } from "./normalize";
 import { buildBoardIndex, boardList, makeLlmClient, matchModel, resolveEntry, scoreForEntry, type BoardIndex, type MatchOutcome } from "./matching";
 import { readJson, round } from "./util";
 import { blendPrice, listProfiles, providerAverage, resolveProfile, summarizeUsage, type ProfileInfo, type UsageSummary } from "./usage";
-import { readState, writeState, type AliasEntry, type ParetoState } from "./state";
+import { readState, writeState, keyOf, type AliasEntry, type ParetoState } from "./state";
 
 export interface ChartParams {
   board?: string;
@@ -46,6 +46,7 @@ export interface ChartPoint {
   groups: string[];
   manual: boolean;
   releaseDate: string;
+  quotaMultiplier: number | null;
 }
 
 export interface NoScorePoint {
@@ -59,6 +60,7 @@ export interface NoScorePoint {
   groups: string[];
   match: { kind: string; confirmed: boolean; model: string } | null;
   releaseDate: string;
+  quotaMultiplier: number | null;
 }
 
 export interface ChartLink {
@@ -250,6 +252,7 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
     }
     const modelId = normalizeModelId(match?.model ?? gateway.model);
     const summaryKey = `${gateway.provider}/${gateway.model}`;
+    const quotaMultiplier = state.quotaMultipliers[keyOf(gateway.provider, gateway.model)] ?? null;
     summaries.set(summaryKey, { modelId, series, releaseDate, blended: price.blended, oldGen: false, keep: true });
     const base = {
       provider: gateway.provider,
@@ -261,6 +264,7 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
       oldGen: false,
       groups: groupIds,
       releaseDate,
+      quotaMultiplier,
     };
     let made = false;
     if (index && match) {

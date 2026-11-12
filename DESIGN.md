@@ -33,6 +33,7 @@
   - LLM 匹配结果（含「已确认 / AI 猜测」状态）
   - 隐藏的渠道（`hiddenProviders`）
   - 隐藏的模型（`hiddenModels`）
+  - 额度倍率（`quotaMultipliers`，键 `provider/model`，用于免费列内的横向排位）
 - 缓存目录：`~/.config/magpie/pareto/cache/`。
 - 所有外部路径和 URL 都能用环境变量覆盖，供 E2E 用：`PARETO_PORT`、`MAGPIE_ADDR`、`PARETO_CONFIG_DIR`（默认 `~/.config/magpie`）、`PARETO_MODELS_JSON`、`PARETO_RAP_URL`、`PARETO_EPOCH_URL`、`PARETO_STATE_DIR`、`PARETO_MAGPIE_ENV`（JSON，写回时传给 magpie CLI 的环境，同 intent-lab）。
 - magpie 可执行文件的查找顺序：`options.magpieBin` → PATH 里的 `magpie` → `/Applications/magpie.app/Contents/MacOS/magpie`。
@@ -86,6 +87,9 @@
 - 2026-11-12 用户改定：图上只画真实渠道的点，不画官方价参照。
 - 横轴默认用对数刻度，可以切到线性。
 - 免费点放在最左侧单独的「免费」列，不在对数轴上。
+  - 送免费额度、按倍率消耗额度的渠道（workbuddy 这类），在 magpie 里通常定价为 0，因此落进免费列。倍率存在 state 的 `quotaMultipliers`（键 `provider/model`），可以在点操作面板里填写或清空。
+  - 免费列内部是一个线性小轴「额度倍率」：0x 在最左，列内最大倍率在最右（最大值至少按 1x 计，避免只有 0x 时挤成一团）。没有倍率的免费点放在列内最右侧，tooltip 标「倍率未知」。
+  - 免费列宽度约为绘图区的 10%，列底部标 `0x` 和列内最大倍率；跨渠道连线连到点在免费列里的实际位置。
 
 ### 纵轴：能力
 
@@ -186,7 +190,8 @@ effort 名对齐也走这套流程。magpie 的 effort 有 low、medium、high�
 ## service API（JSON）
 
 - `GET /api/chart?board=&profile=&scale=`：返回计算好的全部绘图数据：
-  - `points[]`：`{provider, model, series, effort, price{input,output,cache_read,cache_write,blended}, free, score, scoreSource, harness, match:{kind:"manual"|"fuzzy"|"llm", confirmed}, suspect, oldGen, groups[]}`
+  - `points[]`：`{provider, model, series, effort, price{input,output,cache_read,cache_write,blended}, free, score, scoreSource, harness, match:{kind:"manual"|"fuzzy"|"llm", confirmed}, suspect, oldGen, groups[], quotaMultiplier}`
+  - `noScore[]` 同样带 `quotaMultiplier`（未设置时为 `null`）
   - `noScore[]`
   - `providers[]`：`{id, name, modelCount, hidden}`，包含所有有价格的渠道（含隐藏的）
   - `boardModels[]`：当前榜单的全部模型名（名称匹配的 datalist 用）
@@ -201,6 +206,7 @@ effort 名对齐也走这套流程。magpie 的 effort 有 low、medium、high�
   - `POST /api/state/alias`：body `{model, boardModel}`；`boardModel` 为空表示删除这条人工映射。
   - `POST /api/state/providers`：body `{provider, hidden}`，切换渠道显示/隐藏。
   - `POST /api/state/hidden-model`：body `{model, hidden}`，切换模型显示/隐藏。`model` 是 magpie 模型 id（`provider/model` 里的 model 部分），对所有渠道生效。
+  - `POST /api/state/quota-multiplier`：body `{provider, model, multiplier}`，设置额度倍率；`multiplier` 为空或 `null` 表示删除。必须是 >= 0 的有限数，否则返回 400。
 - `POST /api/subscription/preview`：返回价格 diff。
 - `POST /api/subscription/apply`：执行写回，传 `dryRun` 时只返回命令。
 - `POST /api/group/preview`、`POST /api/group/apply`：同上，对象是路由组。

@@ -48,6 +48,15 @@ async function post(path: string, body: unknown) {
   return response.json() as Promise<any>;
 }
 
+async function postStatus(path: string, body: unknown): Promise<number> {
+  const response = await fetch(base + path, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...auth() },
+    body: JSON.stringify(body),
+  });
+  return response.status;
+}
+
 function query(params: Record<string, string | undefined>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) if (value !== undefined) search.set(key, value);
@@ -76,7 +85,7 @@ try {
 
   // 1: only provider/model entries from /v1/models; group/* and auto/* skipped.
   const providers = new Set(c1.points.map((point: any) => point.provider));
-  assert.deepEqual([...providers].sort(), ["chan-a", "chan-b"]);
+  assert.deepEqual([...providers].sort(), ["chan-a", "chan-b", "grant-chan"]);
   assert.ok(c1.points.every((point: any) => !point.model.startsWith("group/") && !point.model.startsWith("auto/")));
   assert.ok(c1.noScore.every((item: any) => ["chan-a", "chan-b", "mock-chan"].includes(item.provider)));
   assert.ok(!c1.points.some((point: any) => point.model === "no-price"));
@@ -118,6 +127,35 @@ try {
   assert.equal(free.price.blended, 0);
   assert.equal(c1.freeColumn, true);
   check("4 free point in the free column", { model: "free-bee", blended: free.price.blended });
+
+  // 4b: quota multipliers are stored per provider/model; they are returned on
+  // free and paid points, survive reloads, reject bad values, and can be cleared.
+  const freePoints = c1.points.filter((point: any) => point.free);
+  assert.ok(freePoints.length >= 2, "the fixture has at least two free points");
+  assert.ok(freePoints.some((point: any) => point.provider === "grant-chan" && point.model === "free-bee"));
+  assert.ok(freePoints.every((point: any) => point.quotaMultiplier === null), "no multiplier by default");
+  const mult0 = await post("/api/state/quota-multiplier", { provider: "chan-a", model: "free-bee", multiplier: 0 });
+  assert.equal(mult0.quotaMultipliers["chan-a/free-bee"], 0);
+  await post("/api/state/quota-multiplier", { provider: "grant-chan", model: "free-bee", multiplier: 1.5 });
+  const cQuota = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  const freeA = pointOfModel(cQuota, "chan-a", "free-bee");
+  const freeB = pointOfModel(cQuota, "grant-chan", "free-bee");
+  assert.equal(freeA.quotaMultiplier, 0);
+  assert.equal(freeB.quotaMultiplier, 1.5);
+  const paidFalcon = pointOfModel(cQuota, "chan-a", "falcon-9");
+  assert.equal(paidFalcon.quotaMultiplier, null, "paid points carry null when unset");
+  assert.equal(await postStatus("/api/state/quota-multiplier", { provider: "chan-a", model: "free-bee", multiplier: -1 }), 400);
+  assert.equal(await postStatus("/api/state/quota-multiplier", { provider: "chan-a", model: "free-bee", multiplier: "abc" }), 400);
+  const stillZero = pointOfModel(await chart({ board: "aa_intelligence_index", profile: "group:g1" }), "chan-a", "free-bee");
+  assert.equal(stillZero.quotaMultiplier, 0, "a rejected value leaves the stored multiplier alone");
+  await post("/api/state/quota-multiplier", { provider: "chan-a", model: "free-bee", multiplier: null });
+  await post("/api/state/quota-multiplier", { provider: "grant-chan", model: "free-bee", multiplier: "" });
+  const cCleared = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  assert.equal(pointOfModel(cCleared, "chan-a", "free-bee").quotaMultiplier, null);
+  assert.equal(pointOfModel(cCleared, "grant-chan", "free-bee").quotaMultiplier, null);
+  check("4b quota multiplier stored per provider/model, returned on free points, bad values 400, clear -> null", {
+    freePoints: freePoints.map((point: any) => `${point.provider}/${point.model}`), set: [0, 1.5],
+  });
 
   // 5: one point per (channel, model); cross-channel solid link; an effort the
   // channel does not support never contributes to the score.

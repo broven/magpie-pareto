@@ -89,6 +89,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 #chart .old-label, #chart .manual-label, #chart .point-label { font-size: 9px; }
 #chart .point-label { pointer-events: none; }
 #chart .free-title { font-size: 11px; fill: var(--muted); }
+#chart .free-subtitle { font-size: 9px; fill: var(--muted); opacity: .85; }
+#chart .free-axis { stroke: var(--line); stroke-width: 1; }
+#chart .free-tick { font-size: 9px; fill: var(--muted); }
 .tooltip {
   position: fixed; z-index: 30; max-width: 340px;
   background: var(--panel); color: var(--fg);

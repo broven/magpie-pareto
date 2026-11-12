@@ -6,7 +6,7 @@ import { DataStore, readGroups, type GatewayModel } from "./datasources";
 import { computeChart } from "./chart";
 import { normalizeModelId } from "./normalize";
 import { aliasKey } from "./matching";
-import { readState, writeState, type ParetoState, type Subscription } from "./state";
+import { readState, writeState, keyOf, type ParetoState, type Subscription } from "./state";
 import { applySubscription, planSnapshotFor, previewSubscription, subscriptionProviders } from "./subscription";
 import { applyGroup, previewGroup } from "./groups";
 import { resolveMagpieBin, type ServiceOptions } from "./magpie";
@@ -166,6 +166,23 @@ function makeFetch(paths: Paths, store: DataStore, magpieBin: string) {
         state.hiddenModels = [...hidden].sort();
         await writeState(state, paths);
         return json({ ok: true, hiddenModels: state.hiddenModels });
+      }
+      if (method === "POST" && url.pathname === "/api/state/quota-multiplier") {
+        const body = await readBody(request);
+        const provider = String(body?.provider ?? "").trim();
+        const model = String(body?.model ?? "").trim();
+        if (!provider || !model) return failure(400, "provider 和 model 都不能为空");
+        const state = await readState(paths);
+        const key = keyOf(provider, model);
+        if (body?.multiplier === null || body?.multiplier === undefined || body?.multiplier === "") {
+          delete state.quotaMultipliers[key];
+        } else {
+          const multiplier = Number(body.multiplier);
+          if (!Number.isFinite(multiplier) || multiplier < 0) return failure(400, "multiplier 必须是 >= 0 的数字");
+          state.quotaMultipliers[key] = multiplier;
+        }
+        await writeState(state, paths);
+        return json({ ok: true, quotaMultipliers: state.quotaMultipliers });
       }
       if (method === "POST" && url.pathname === "/api/state/manual-score") {
         const body = await readBody(request);

@@ -83,10 +83,22 @@ function renderChart(data) {
   svg.replaceChildren();
   state.colors = new Map();
   const W = 1000, H = 560;
-  const left = 72, right = 26, top = 28, bottom = 86, freeWidth = 64;
+  const left = 72, right = 26, top = 28, bottom = 86;
+  // The free column gets ~10% of the plot width: free-quota channels are
+  // positioned inside it by their quota multiplier, not by price.
+  const freeWidth = Math.round((W - left - right) * 0.1);
   const plotLeft = left + freeWidth, plotRight = W - right, plotTop = top, plotBottom = H - bottom;
-  const freeX = left + freeWidth / 2;
+  const freeLeft = left + 12;
+  const freeRight = left + freeWidth - 13;
+  const freeCenter = left + (freeWidth - 6) / 2;
   const points = data.points ?? [];
+  const freeQuotas = points
+    .filter(point => point.free && Number.isFinite(point.quotaMultiplier))
+    .map(point => Number(point.quotaMultiplier));
+  const freeMaxQuota = Math.max(1, ...freeQuotas);
+  const freeXOf = quota => quota == null || !Number.isFinite(Number(quota))
+    ? freeRight
+    : freeLeft + (Math.min(Math.max(Number(quota), 0), freeMaxQuota) / freeMaxQuota) * (freeRight - freeLeft);
   const scored = points.filter(point => Number.isFinite(point.score));
   let yMin = scored.length ? Math.min(...scored.map(point => point.score)) : 0;
   let yMax = scored.length ? Math.max(...scored.map(point => point.score)) : 100;
@@ -116,9 +128,16 @@ function renderChart(data) {
     : plotLeft + ((Math.log10(value) - Math.log10(xMin)) / (Math.log10(xMax) - Math.log10(xMin))) * (plotRight - plotLeft);
   const y = score => plotBottom - ((score - yMin) / (yMax - yMin)) * (plotBottom - plotTop);
 
-  // Free column background and separator.
+  // Free column background and separator. Inside it, points are placed on a
+  // small linear "quota multiplier" axis: 0x on the left, the column's max
+  // multiplier on the right (at least 1x); points without a multiplier sit at
+  // the far right and say so in the tooltip.
   svg.append(svgEl("rect", { x: left, y: plotTop, width: freeWidth - 6, height: plotBottom - plotTop, fill: "currentColor", "fill-opacity": 0.04, rx: 6 }));
-  svg.append(svgEl("text", { x: freeX, y: plotTop - 8, "text-anchor": "middle", class: "free-title" }, "免费"));
+  svg.append(svgEl("text", { x: freeCenter, y: plotTop - 8, "text-anchor": "middle", class: "free-title" }, "免费"));
+  svg.append(svgEl("text", { x: freeCenter, y: plotTop + 14, "text-anchor": "middle", class: "free-subtitle" }, "额度倍率"));
+  svg.append(svgEl("line", { x1: freeLeft, y1: plotBottom + 6, x2: freeRight, y2: plotBottom + 6, class: "free-axis" }));
+  svg.append(svgEl("text", { x: freeLeft, y: plotBottom + 18, "text-anchor": "middle", class: "free-tick" }, "0x"));
+  svg.append(svgEl("text", { x: freeRight, y: plotBottom + 18, "text-anchor": "middle", class: "free-tick" }, `${fmt(freeMaxQuota, 2)}x`));
   svg.append(svgEl("line", { x1: plotLeft - 6, y1: plotTop, x2: plotLeft - 6, y2: plotBottom, class: "free-sep" }));
 
   // Y grid and ticks.
@@ -163,7 +182,12 @@ function renderChart(data) {
     data.board ? `${data.board.name} · ${data.board.metric}` : "能力分"));
 
   // Links first, under the points. One point per (channel, model), so links
-  // only join the same model across channels.
+  // only join the same model across channels. Free points connect at their
+  // quota-multiplier slot inside the free column.
+  const pointX = new Map(points.map(point => [
+    `${point.provider}/${point.model}`,
+    point.free ? freeXOf(point.quotaMultiplier) : x(point.price.blended),
+  ]));
   for (const link of data.links ?? []) {
     if (link.kind !== "horizontal") continue;
     const color = colorFor(link.modelKey);
@@ -172,8 +196,8 @@ function renderChart(data) {
       for (let j = i + 1; j < list.length; j++) {
         const a = list[i], b = list[j];
         if (a.provider === b.provider) continue;
-        const ax = a.price > 0 ? x(a.price) : freeX;
-        const bx = b.price > 0 ? x(b.price) : freeX;
+        const ax = pointX.get(`${a.provider}/${a.model}`) ?? (a.price > 0 ? x(a.price) : freeXOf(null));
+        const bx = pointX.get(`${b.provider}/${b.model}`) ?? (b.price > 0 ? x(b.price) : freeXOf(null));
         svg.append(svgEl("line", { x1: ax, y1: y(a.score), x2: bx, y2: y(b.score), stroke: color, class: "link-h" }));
       }
     }
@@ -187,7 +211,7 @@ function renderChart(data) {
 
   const drawPoint = point => {
     const color = colorFor(point.modelKey);
-    const px = point.free ? freeX : x(point.price.blended);
+    const px = point.free ? freeXOf(point.quotaMultiplier) : x(point.price.blended);
     const py = y(point.score);
     const circle = svgEl("circle", {
       cx: px, cy: py, r: 6.5,
@@ -285,10 +309,12 @@ function tooltipRows(point) {
     ["output", `$${fmt(point.price.output)} / MTok`],
     ["cache read", `$${fmt(point.price.cache_read)} / MTok`],
     ["cache write", `$${fmt(point.price.cache_write)} / MTok`],
-    ["合成价", `$${fmt(point.price.blended)} / MTok`],
+    ["合成价", point.free ? "免费额度" : `$${fmt(point.price.blended)} / MTok`],
     ["分数", `${fmt(point.score, 2)}（${point.scoreSource}）`],
     ["匹配", point.match ? `${MATCH_LABEL[point.match.kind] ?? point.match.kind}${point.match.confirmed ? "" : " · 未确认"}` : "—"],
   ];
+  if (point.quotaMultiplier != null) rows.push(["额度倍率", `${fmt(point.quotaMultiplier, 3)}x`]);
+  else if (point.free) rows.push(["额度倍率", "倍率未知"]);
   if (point.suspect) rows.push(["存疑", `系数 ${fmt(point.suspectFactor, 3)}`]);
   if (point.oldGen) rows.push(["代际", "旧代"]);
   if (point.groups?.length) rows.push(["路由组", point.groups.join(", ")]);
@@ -430,6 +456,34 @@ function renderPointActions() {
   });
   suspectSection.append(suspectBox, el("span", "muted", "分数 ×"), factor, suspectSave);
   menu.append(suspectSection);
+
+  const quotaSection = el("div", "section");
+  quotaSection.append(el("b", "", "额度倍率"));
+  const quotaInput = el("input");
+  quotaInput.type = "number";
+  quotaInput.step = "0.01";
+  quotaInput.min = "0";
+  quotaInput.placeholder = "例如 0.11（留空表示未知）";
+  quotaInput.value = target.quotaMultiplier == null ? "" : String(target.quotaMultiplier);
+  quotaInput.dataset.testid = "quota-multiplier-input";
+  const quotaSave = el("button", "", "保存");
+  quotaSave.type = "button";
+  quotaSave.dataset.testid = "quota-multiplier-save";
+  quotaSave.addEventListener("click", async () => {
+    try {
+      await api("/api/state/quota-multiplier", {
+        method: "POST",
+        body: {
+          provider: target.provider,
+          model: target.model,
+          multiplier: quotaInput.value === "" ? null : Number(quotaInput.value),
+        },
+      });
+      await loadChart();
+    } catch (error) { setStatus("#warnings", `额度倍率设置失败：${error.message}`, "bad"); }
+  });
+  quotaSection.append(quotaInput, el("span", "muted", "x"), quotaSave);
+  menu.append(quotaSection);
 
   const seriesSection = el("div", "section");
   seriesSection.append(el("b", "", "系列"));

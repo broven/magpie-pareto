@@ -31,6 +31,13 @@
       "key": "sk-test-mock",
       "chat": "https://mock-chan.example/v1",
       "models": ["hy4free"]
+    },
+    {
+      "id": "grant-chan",
+      "name": "Grant Chan",
+      "key": "sk-test-grant",
+      "chat": "https://grant-chan.example/v1",
+      "models": ["free-bee"]
     }
   ],
   "groups": [

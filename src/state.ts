@@ -43,6 +43,7 @@ export interface ParetoState {
   subscriptions: Record<string, Subscription>;
   hiddenProviders: string[];
   hiddenModels: string[];
+  quotaMultipliers: Record<string, number>;
 }
 
 export function defaultState(): ParetoState {
@@ -58,6 +59,7 @@ export function defaultState(): ParetoState {
     subscriptions: {},
     hiddenProviders: [],
     hiddenModels: [],
+    quotaMultipliers: {},
   };
 }
 
@@ -81,6 +83,11 @@ export async function readState(paths: Paths = resolvePaths()): Promise<ParetoSt
     hiddenModels: Array.isArray(raw.hiddenModels)
       ? [...new Set(raw.hiddenModels.map(String).filter(Boolean))]
       : [],
+    quotaMultipliers: isObject(raw.quotaMultipliers)
+      ? Object.fromEntries(Object.entries(raw.quotaMultipliers)
+        .map(([key, value]) => [key, Number(value)])
+        .filter(([, value]) => Number.isFinite(value as number) && (value as number) >= 0))
+      : {},
   };
   return state;
 }

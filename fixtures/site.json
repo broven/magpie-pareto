@@ -22,6 +22,8 @@
     { "board": "aa_intelligence_index", "model": "orbit-1", "reasoning_effort": "high", "agent_harness": "H1", "score": 30 },
     { "board": "aa_intelligence_index", "model": "free-bee", "reasoning_effort": "high", "agent_harness": "H1", "score": 20 },
     { "board": "aa_intelligence_index", "model": "falcon-9-mini", "reasoning_effort": "high", "agent_harness": "H1", "score": 45 },
+    { "board": "aa_intelligence_index", "model": "deepseek-v4.1-flash", "reasoning_effort": "high", "agent_harness": "H1", "score": 58 },
+    { "board": "aa_intelligence_index", "model": "claude-sonnet-4-6", "reasoning_effort": "high", "agent_harness": "H1", "score": 68 },
     { "board": "terminal_bench_4", "model": "falcon-9", "reasoning_effort": null, "agent_harness": "H1", "score": 30 }
   ],
   "points": [

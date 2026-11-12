@@ -12,6 +12,7 @@ import {
   type Price,
 } from "./datasources";
 import { normalizeModelId, seriesKey } from "./normalize";
+import { LABS, labById, labForModel, OTHER_LAB } from "./lab";
 import { buildBoardIndex, boardList, makeLlmClient, matchModel, resolveEntry, scoreForEntry, type BoardIndex, type MatchOutcome } from "./matching";
 import { readJson, round } from "./util";
 import { blendPrice, listProfiles, providerAverage, resolveProfile, summarizeUsage, type ProfileInfo, type UsageSummary } from "./usage";
@@ -31,6 +32,7 @@ export interface ChartPoint {
   model: string;
   modelKey: string;
   series: string;
+  lab: string;
   effort: string;
   effortKey: string;
   price: Price & { blended: number };
@@ -54,6 +56,7 @@ export interface NoScorePoint {
   model: string;
   modelKey: string;
   series: string;
+  lab: string;
   price: Price & { blended: number };
   free: boolean;
   oldGen: boolean;
@@ -80,6 +83,7 @@ export interface ChartData {
   points: ChartPoint[];
   noScore: NoScorePoint[];
   links: ChartLink[];
+  labs: Array<{ id: string; name: string }>;
   providers: Array<{ id: string; name: string; modelCount: number; hidden: boolean }>;
   boardModels: string[];
   unmatched: Array<{ model: string; providers: string[] }>;
@@ -251,6 +255,7 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
       unmatched.set(gateway.model, providers);
     }
     const modelId = normalizeModelId(match?.model ?? gateway.model);
+    const lab = labForModel(modelId).id;
     const summaryKey = `${gateway.provider}/${gateway.model}`;
     const quotaMultiplier = state.quotaMultipliers[keyOf(gateway.provider, gateway.model)] ?? null;
     summaries.set(summaryKey, { modelId, series, releaseDate, blended: price.blended, oldGen: false, keep: true });
@@ -259,6 +264,7 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
       model: gateway.model,
       modelKey: modelId,
       series,
+      lab,
       price,
       free,
       oldGen: false,
@@ -386,6 +392,15 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
     try { await writeState(state, paths); } catch { /* cache write is best effort */ }
   }
 
+  // Labs present in the response, in the fixed LABS order (其他 last). The UI
+  // uses this list to name the legend groups.
+  const labOrder = new Map([...LABS, OTHER_LAB].map((lab, index) => [lab.id, index]));
+  const usedLabIds = new Set([...keptPoints.map(point => point.lab), ...keptNoScore.map(item => item.lab)]);
+  const labs = [...usedLabIds]
+    .map(id => labById(id))
+    .sort((a, b) => (labOrder.get(a.id) ?? LABS.length + 1) - (labOrder.get(b.id) ?? LABS.length + 1) || a.id.localeCompare(b.id))
+    .map(lab => ({ id: lab.id, name: lab.name }));
+
   return {
     board: board ? { ...board } : null,
     scale,
@@ -394,6 +409,7 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
     points: keptPoints,
     noScore: keptNoScore,
     links,
+    labs,
     providers,
     boardModels,
     unmatched: unmatchedList,

@@ -2,7 +2,21 @@
 // asked by relative address so it works behind magpie web's proxy path.
 const API_TOKEN = document.querySelector('meta[name="pareto-token"]')?.content ?? "";
 const NS = "http://www.w3.org/2000/svg";
-const PALETTE = ["#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f", "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#7aa2f7", "#e6b84c", "#6cc99a"];
+// Color scheme: one fixed base hue per lab (vendor); the series of a lab are
+// nearby variants of it. Hues are spread so different labs stay apart, and
+// every variant stays mid-lightness so it reads on both the light and the
+// dark theme. The variant index comes from the sorted series names, which
+// makes the assignment stable for a given data set regardless of point order.
+// Labs are ~25 degrees apart; a lab's series move only +/-6 degrees in hue and
+// spread mostly in lightness, so neighbors (DeepSeek/Google, 智谱/DeepSeek)
+// stay apart. xAI is a dark neutral slate (its brand is black) rather than a
+// hue, which frees a slot in the crowded blue range.
+const LAB_HUE = {
+  alibaba: 350, anthropic: 20, xiaomi: 38, meituan: 52, nvidia: 80,
+  stepfun: 108, openai: 145, bytedance: 170, minimax: 190, google: 212,
+  deepseek: 232, zhipu: 280, tencent: 302, moonshot: 326,
+};
+const NEUTRAL_LABS = { xai: { hue: 215, sat: 12, light: [30, 44] }, other: { hue: 220, sat: 6, light: [52, 68] } };
 const MATCH_LABEL = { manual: "人工", fuzzy: "模糊", llm: "AI 猜测" };
 
 const state = {
@@ -61,11 +75,50 @@ function fmtDate(iso) {
   return date.toLocaleString("zh-CN", { hour12: false });
 }
 
-function colorFor(modelKey) {
-  if (!state.colors.has(modelKey)) {
-    state.colors.set(modelKey, PALETTE[state.colors.size % PALETTE.length]);
+// The page follows the system theme (style.css uses prefers-color-scheme), so
+// the lightness band does too: the dark band would vanish on a dark page.
+// Read at render time, and the chart is redrawn when the system theme flips.
+const DARK_QUERY = window.matchMedia?.("(prefers-color-scheme: dark)");
+DARK_QUERY?.addEventListener?.("change", () => {
+  if (!state.chart) return;
+  renderChart(state.chart);
+  renderLegend(state.chart);
+});
+
+function seriesColor(lab, index, count) {
+  const t = count <= 1 ? 0.5 : index / (count - 1);
+  const neutral = NEUTRAL_LABS[lab] ?? (LAB_HUE[lab] === undefined ? NEUTRAL_LABS.other : null);
+  if (neutral) {
+    // Gray ramps: 其他 never looks like a vendor, xAI reads as dark slate
+    // (light slate on a dark page).
+    const [low, high] = neutral.light;
+    const shift = DARK_QUERY?.matches ? 30 : 0;
+    return `hsl(${neutral.hue} ${neutral.sat}% ${low + shift + (high - low) * t}%)`;
   }
-  return state.colors.get(modelKey);
+  const hue = LAB_HUE[lab];
+  const offset = count <= 1 ? 0 : -6 + 12 * t;
+  const light = (DARK_QUERY?.matches ? 56 : 38) + 24 * t;
+  const sat = 68 - (index % 2) * 10;
+  return `hsl(${(hue + offset + 360) % 360} ${sat}% ${light}%)`;
+}
+
+function buildSeriesColors(data) {
+  const byLab = new Map();
+  for (const point of data.points ?? []) {
+    const list = byLab.get(point.lab) ?? new Set();
+    list.add(point.series);
+    byLab.set(point.lab, list);
+  }
+  const colors = new Map();
+  for (const [lab, set] of byLab) {
+    const series = [...set].sort();
+    series.forEach((key, index) => colors.set(key, seriesColor(lab, index, series.length)));
+  }
+  return colors;
+}
+
+function colorFor(series) {
+  return state.colors.get(series) ?? "#8a8a85";
 }
 
 function setStatus(selector, text, kind) {
@@ -81,7 +134,7 @@ function setStatus(selector, text, kind) {
 function renderChart(data) {
   const svg = $("#chart");
   svg.replaceChildren();
-  state.colors = new Map();
+  state.colors = buildSeriesColors(data);
   const W = 1000, H = 560;
   const left = 72, right = 26, top = 28, bottom = 86;
   // The free column gets ~10% of the plot width: free-quota channels are
@@ -192,7 +245,8 @@ function renderChart(data) {
   ]));
   for (const link of data.links ?? []) {
     if (link.kind !== "horizontal") continue;
-    const color = colorFor(link.modelKey);
+    const series = points.find(point => point.modelKey === link.modelKey)?.series;
+    const color = colorFor(series);
     const list = [...link.points].sort((a, b) => a.price - b.price);
     for (let i = 0; i < list.length; i++) {
       for (let j = i + 1; j < list.length; j++) {
@@ -212,7 +266,7 @@ function renderChart(data) {
   };
 
   const drawPoint = point => {
-    const color = colorFor(point.modelKey);
+    const color = colorFor(point.series);
     const px = point.free ? freeXOf(point.quotaMultiplier) : x(point.price.blended);
     const py = y(point.score);
     const circle = svgEl("circle", {
@@ -329,7 +383,7 @@ function showTooltip(event, point) {
   box.replaceChildren();
   const title = el("div");
   const dot = el("span");
-  dot.style.cssText = `display:inline-block;width:9px;height:9px;border-radius:50%;background:${colorFor(point.modelKey)};margin-right:6px`;
+  dot.style.cssText = `display:inline-block;width:9px;height:9px;border-radius:50%;background:${colorFor(point.series)};margin-right:6px`;
   title.append(dot, el("b", "", `${point.model} · ${point.effort}`));
   box.append(title);
   const table = el("table");
@@ -642,17 +696,53 @@ async function loadChart() {
   }
 }
 
+function newerPoint(a, b) {
+  if (!b) return true;
+  if (!!a.oldGen !== !!b.oldGen) return !a.oldGen;
+  const dateA = a.releaseDate ?? "", dateB = b.releaseDate ?? "";
+  if (dateA !== dateB) return dateA > dateB;
+  // Same generation: prefer the point that matched its own name, so a
+  // "-preview" fuzzy-mapped to another model does not relabel the series.
+  const exactA = String(a.matchedModel ?? a.model) === String(a.model);
+  const exactB = String(b.matchedModel ?? b.model) === String(b.model);
+  if (exactA !== exactB) return exactA;
+  return String(a.matchedModel ?? a.model) < String(b.matchedModel ?? b.model);
+}
+
 function renderLegend(data) {
   const legend = $("#legend");
   legend.replaceChildren();
-  const seen = new Map();
-  for (const point of data.points) if (!seen.has(point.modelKey)) seen.set(point.modelKey, point.matchedModel ?? point.model);
-  for (const [modelKey, model] of [...seen.entries()].slice(0, 14)) {
-    const item = el("span", "item");
-    const swatch = el("span", "swatch");
-    swatch.style.background = colorFor(modelKey);
-    item.append(swatch, el("span", "", model));
-    legend.append(item);
+  const points = data.points ?? [];
+  // Display name: the newest generation's model name, not the internal
+  // series key. Colors come from the same series map the chart uses.
+  const latest = new Map();
+  for (const point of points) {
+    if (!latest.has(point.series) || newerPoint(point, latest.get(point.series))) latest.set(point.series, point);
+  }
+  const byLab = new Map();
+  for (const point of points) {
+    const list = byLab.get(point.lab) ?? new Set();
+    list.add(point.series);
+    byLab.set(point.lab, list);
+  }
+  const names = new Map((data.labs ?? []).map(lab => [lab.id, lab.name]));
+  const order = (data.labs ?? []).map(lab => lab.id);
+  const labIds = [...byLab.keys()].sort((a, b) => {
+    const indexA = order.indexOf(a), indexB = order.indexOf(b);
+    return (indexA < 0 ? 999 : indexA) - (indexB < 0 ? 999 : indexB) || a.localeCompare(b);
+  });
+  for (const lab of labIds) {
+    const row = el("div", "legend-row");
+    row.append(el("span", "lab-name", `${names.get(lab) ?? lab}：`));
+    for (const series of [...byLab.get(lab)].sort()) {
+      const item = el("span", "item");
+      const swatch = el("span", "swatch");
+      swatch.style.background = colorFor(series);
+      const point = latest.get(series);
+      item.append(swatch, el("span", "", point ? point.matchedModel ?? point.model : series));
+      row.append(item);
+    }
+    legend.append(row);
   }
 }
 

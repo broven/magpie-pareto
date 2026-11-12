@@ -4,6 +4,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { root, startFixtureStack } from "./fixtures";
+import { labForModel } from "../src/lab";
 
 const artifactDir = join(root, "artifacts");
 await mkdir(artifactDir, { recursive: true, mode: 0o700 });
@@ -92,6 +93,53 @@ try {
   assert.equal(c1.boards.length, 10, "8 RAP boards plus ECI and SWE");
   check("1 only /v1/models provider/model entries; group and auto skipped", {
     providers: [...providers], boards: c1.boards.map((board: any) => board.id),
+  });
+
+  // 1b: every point / no-score entry carries its lab (vendor); known model-id
+  // prefixes map to the expected lab and unknown prefixes fall back to 其他.
+  const labCases: Record<string, string> = {
+    "claude-opus-4-6": "anthropic",
+    "gpt-5.1": "openai",
+    "codex-1": "openai",
+    "o4-mini": "openai",
+    "gemini-2.5-pro": "google",
+    "deepseek-v4.1-flash": "deepseek",
+    "glm-4.6": "zhipu",
+    "kimi-k3": "moonshot",
+    "qwen3-max": "alibaba",
+    "minimax-m2": "minimax",
+    "grok-4": "xai",
+    "doubao-seed-1.6": "bytedance",
+    "seed-oss-36b": "bytedance",
+    "hy4free": "tencent",
+    "hunyuan-large": "tencent",
+    "mimo-v2.6-flash": "xiaomi",
+    "step-3": "stepfun",
+    "longcat-flash": "meituan",
+    "nemotron-4": "nvidia",
+    "openrouter/deepseek-v4.1-flash": "deepseek",
+    "falcon-9": "other",
+    "mystery-7": "other",
+  };
+  const wrongLabs = Object.entries(labCases)
+    .filter(([model, lab]) => labForModel(model).id !== lab)
+    .map(([model, lab]) => `${model}: ${labForModel(model).id} != ${lab}`);
+  assert.deepEqual(wrongLabs, [], "lab prefix mapping");
+  assert.ok(c1.points.every((point: any) => typeof point.lab === "string" && point.lab.length > 0), "every point has a lab");
+  assert.ok(c1.noScore.every((item: any) => typeof item.lab === "string" && item.lab.length > 0), "every no-score item has a lab");
+  assert.equal(pointOfModel(c1, "chan-a", "falcon-9").lab, "other", "an unknown fixture prefix falls to 其他");
+  assert.equal(pointOfModel(c1, "chan-a", "deepseek-v4.1-flash").lab, "deepseek", "a deepseek-prefixed fixture model");
+  assert.equal(pointOfModel(c1, "chan-a", "claude-sonnet-4-6").lab, "anthropic", "a claude-prefixed fixture model");
+  assert.equal(c1.noScore.find((item: any) => item.provider === "mock-chan" && item.model === "hy4free").lab, "tencent");
+  assert.ok(c1.labs.some((lab: any) => lab.id === "other" && lab.name === "其他"), "the lab list names 其他");
+  assert.ok(c1.labs.some((lab: any) => lab.id === "tencent" && lab.name === "腾讯"), "the lab list names 腾讯");
+  assert.ok(c1.labs.some((lab: any) => lab.id === "deepseek" && lab.name === "DeepSeek"), "the lab list names DeepSeek");
+  assert.ok(c1.labs.some((lab: any) => lab.id === "anthropic" && lab.name === "Anthropic"), "the lab list names Anthropic");
+  check("1b points carry lab; known prefixes map to labs; unknown -> 其他", {
+    labs: c1.labs,
+    fixtureLabs: ["deepseek-v4.1-flash", "claude-sonnet-4-6", "falcon-9"]
+      .map((model: string) => `${model}: ${pointOfModel(c1, "chan-a", model).lab}`),
+    hy4free: "tencent",
   });
 
   // 2: hand-calculated blended prices under all / group:g1 / 3:1.

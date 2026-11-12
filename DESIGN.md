@@ -104,6 +104,7 @@
   - 分数 = 当前榜单上这个模型在**该渠道 `reasoning_levels` 支持的 effort** 中的最高分（各 harness 取最高）。渠道没有声明 `reasoning_levels`，或者榜单的分数没有 effort 维度，就取这个模型在榜单上的最高分。
   - tooltip 里写明取的是哪个 effort 和 harness。
 - **同一个模型用同一种颜色。** 同一模型在不同渠道上的点，用实线横线连起来。
+- **颜色按厂商分组。** 模型 id 规范化（去掉 provider 前缀）后按前缀识别厂商：claude→Anthropic；gpt / codex / o数字→OpenAI；gemini→Google；deepseek、glm→智谱、kimi→Moonshot、qwen→阿里、minimax、grok→xAI、doubao / seed→字节、hy数字 / hunyuan→腾讯、mimo→小米、step→阶跃、longcat→美团、nemotron→NVIDIA；其余归「其他」。每个厂商一个固定基准色相，同厂商下的系列按系列名排序后在该色相附近分配变体（色相 ±12°、明度在固定区间内均匀取值），所以同一系列的新旧代同色，「其他」用低饱和灰系。颜色只由数据决定，和点的顺序无关。点、跨渠道连线（仍按模型分组，取该组的系列色）、tooltip 色点和图例全部用系列色。图例按厂商分组，列出当前图上所有可见系列（不截断），系列显示名取该系列最新一代的模型名。
 - **图上只画真实渠道的点，不画官方价参照**（2026-11-12 用户改定）。
 - 有价格但当前榜单没有分数的模型，放进图底部的「无分数」带，按价格排开。点一下可以给当前榜单手动打分，存进 state，手动分画成实心点并加标注。
 - 图表上方有一排渠道 chip，列出 `/v1/models` 里所有有价格的渠道（显示渠道名和模型数）。点击切换显示/隐藏。默认全部显示，状态存在 state 的 `hiddenProviders`。

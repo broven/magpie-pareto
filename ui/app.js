@@ -145,8 +145,10 @@ function renderChart(data) {
   for (let i = 0; i <= yTicks; i++) {
     const value = yMin + ((yMax - yMin) * i) / yTicks;
     const yy = y(value);
-    svg.append(svgEl("line", { x1: plotLeft, y1: yy, x2: plotRight, y2: yy, class: "grid" }));
-    svg.append(svgEl("text", { x: plotLeft - 10, y: yy + 4, "text-anchor": "end" }, fmt(value, Math.abs(value) >= 100 ? 0 : 1)));
+    // Labels sit left of the free column so free points never cover them;
+    // the grid runs through the free column so its rows read against the axis.
+    svg.append(svgEl("line", { x1: left, y1: yy, x2: plotRight, y2: yy, class: "grid" }));
+    svg.append(svgEl("text", { x: left - 8, y: yy + 4, "text-anchor": "end" }, fmt(value, Math.abs(value) >= 100 ? 0 : 1)));
   }
 
   // X grid and ticks.

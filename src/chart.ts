@@ -81,6 +81,7 @@ export interface ChartData {
   providers: Array<{ id: string; name: string; modelCount: number; hidden: boolean }>;
   boardModels: string[];
   unmatched: Array<{ model: string; providers: string[] }>;
+  hiddenModels: Array<{ model: string; providers: string[] }>;
   aliases: Array<{ model: string; boardModel: string }>;
   boards: Array<{ id: string; name: string; metric: string; snapshot: string; source: string }>;
   profiles: Array<{ id: string; label: string }>;
@@ -216,6 +217,7 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
   const noScore: NoScorePoint[] = [];
   const summaries = new Map<string, ModelSummary>();
   const hiddenProviders = new Set(state.hiddenProviders);
+  const hiddenModels = new Set(state.hiddenModels);
   const providerNames = readProviderNames(paths);
   const unmatched = new Map<string, Set<string>>();
   const scale = params.scale === "linear" ? "linear" : "log";
@@ -241,7 +243,7 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
         onLlmCache: () => { llmChanged = true; },
       });
     }
-    if (index && !match) {
+    if (index && !match && !hiddenModels.has(gateway.model)) {
       const providers = unmatched.get(gateway.model) ?? new Set<string>();
       providers.add(gateway.provider);
       unmatched.set(gateway.model, providers);
@@ -318,8 +320,8 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
   const keepOf = (provider: string, model: string): boolean => summaries.get(`${provider}/${model}`)?.keep ?? true;
   const oldOf = (provider: string, model: string): boolean => summaries.get(`${provider}/${model}`)?.oldGen ?? false;
 
-  let keptPoints = points.filter(point => !hiddenProviders.has(point.provider) && keepOf(point.provider, point.model));
-  let keptNoScore = noScore.filter(item => !hiddenProviders.has(item.provider) && keepOf(item.provider, item.model));
+  let keptPoints = points.filter(point => !hiddenProviders.has(point.provider) && !hiddenModels.has(point.model) && keepOf(point.provider, point.model));
+  let keptNoScore = noScore.filter(item => !hiddenProviders.has(item.provider) && !hiddenModels.has(item.model) && keepOf(item.provider, item.model));
   for (const point of keptPoints) point.oldGen = oldOf(point.provider, point.model);
   for (const item of keptNoScore) item.oldGen = oldOf(item.provider, item.model);
 
@@ -343,6 +345,16 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
   const unmatchedList = [...unmatched.entries()]
     .map(([model, list]) => ({ model, providers: [...list].sort() }))
     .sort((a, b) => a.model.localeCompare(b.model));
+  const hiddenModelProviders = new Map<string, Set<string>>();
+  for (const gateway of data.gateway) {
+    if (!gateway.pricing) continue;
+    const list = hiddenModelProviders.get(gateway.model) ?? new Set<string>();
+    list.add(gateway.provider);
+    hiddenModelProviders.set(gateway.model, list);
+  }
+  const hiddenModelsList = [...hiddenModels]
+    .sort((a, b) => a.localeCompare(b))
+    .map(model => ({ model, providers: [...(hiddenModelProviders.get(model) ?? [])].sort() }));
   const userAliases = Object.entries(state.aliases)
     .filter(([, entry]) => entry && typeof entry === "object" && entry.model)
     .map(([model, entry]) => ({ model, boardModel: entry.model }))
@@ -381,6 +393,7 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
     providers,
     boardModels,
     unmatched: unmatchedList,
+    hiddenModels: hiddenModelsList,
     aliases: userAliases,
     boards,
     profiles: listProfiles(usage).map(item => ({ id: item.id, label: item.label })),

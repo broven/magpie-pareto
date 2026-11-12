@@ -207,6 +207,43 @@ try {
     unmatched: hy4free.providers, aliasedScore: hyPoint.score,
   });
 
+  // 6d: hiding a model drops its points, no-score items and cross-channel
+  // links everywhere, and takes it out of the unmatched list; hiddenModels
+  // lists it with its channels; restoring brings everything back.
+  const cBeforeModelHide = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  assert.ok(cBeforeModelHide.points.some((point: any) => point.model === "falcon-9"));
+  assert.ok(!cBeforeModelHide.hiddenModels.some((item: any) => item.model === "falcon-9"));
+  const hiddenModelState = await post("/api/state/hidden-model", { model: "falcon-9", hidden: true });
+  assert.deepEqual(hiddenModelState.hiddenModels, ["falcon-9"]);
+  const cModelHidden = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  assert.ok(!cModelHidden.points.some((point: any) => point.model === "falcon-9"), "hidden model draws no points");
+  assert.ok(!cModelHidden.noScore.some((item: any) => item.model === "falcon-9"), "hidden model draws no no-score items");
+  assert.ok(!cModelHidden.links.some((link: any) => link.points.some((point: any) => point.model === "falcon-9")), "no cross-channel link contains the hidden model");
+  const hiddenEntry = cModelHidden.hiddenModels.find((item: any) => item.model === "falcon-9");
+  assert.ok(hiddenEntry, "hiddenModels lists the hidden model");
+  assert.deepEqual(hiddenEntry.providers, ["chan-a", "chan-b"]);
+  assert.deepEqual(
+    cModelHidden.providers.map((provider: any) => [provider.id, provider.modelCount]),
+    cBeforeModelHide.providers.map((provider: any) => [provider.id, provider.modelCount]),
+    "channel chip model counts stay unchanged",
+  );
+  await post("/api/state/hidden-model", { model: "hy4free", hidden: true });
+  const cBothHidden = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  assert.ok(!cBothHidden.unmatched.some((item: any) => item.model === "hy4free"), "hidden model leaves the unmatched list");
+  assert.ok(cBothHidden.hiddenModels.some((item: any) => item.model === "hy4free"));
+  await post("/api/state/hidden-model", { model: "falcon-9", hidden: false });
+  await post("/api/state/hidden-model", { model: "hy4free", hidden: false });
+  const cModelRestored = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  assert.ok(cModelRestored.points.some((point: any) => point.model === "falcon-9"), "restoring the model brings its points back");
+  assert.ok(cModelRestored.links.some((link: any) => link.modelKey === "falcon-9"), "restoring the model brings the cross-channel link back");
+  assert.ok(cModelRestored.unmatched.some((item: any) => item.model === "hy4free"), "restoring the model brings the unmatched entry back");
+  assert.equal(cModelRestored.hiddenModels.length, 0);
+  const stateWithHiddenModels = await get("/api/state");
+  assert.deepEqual(stateWithHiddenModels.hiddenModels, []);
+  check("6d hidden model drops points, no-score items, links and unmatched entry; restoring returns them", {
+    hiddenProviders: hiddenEntry.providers, hiddenList: cBothHidden.hiddenModels.map((item: any) => item.model),
+  });
+
   // 7: series, latest-generation filtering, cheap-old exception, allOld switch.
   const falcon9 = pointOfModel(c1, "chan-a", "falcon-9");
   const falcon8 = pointOf(c1, "chan-a", "falcon-8", "high");

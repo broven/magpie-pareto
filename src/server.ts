@@ -155,6 +155,18 @@ function makeFetch(paths: Paths, store: DataStore, magpieBin: string) {
         await writeState(state, paths);
         return json({ ok: true, hiddenProviders: state.hiddenProviders });
       }
+      if (method === "POST" && url.pathname === "/api/state/hidden-model") {
+        const body = await readBody(request);
+        const model = String(body?.model ?? "").trim();
+        if (!model) return failure(400, "model 不能为空");
+        const state = await readState(paths);
+        const hidden = new Set(state.hiddenModels);
+        if (body?.hidden === true) hidden.add(model);
+        else hidden.delete(model);
+        state.hiddenModels = [...hidden].sort();
+        await writeState(state, paths);
+        return json({ ok: true, hiddenModels: state.hiddenModels });
+      }
       if (method === "POST" && url.pathname === "/api/state/manual-score") {
         const body = await readBody(request);
         const board = String(body?.board ?? "").trim();

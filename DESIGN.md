@@ -32,6 +32,7 @@
   - LLM 匹配用哪个模型
   - LLM 匹配结果（含「已确认 / AI 猜测」状态）
   - 隐藏的渠道（`hiddenProviders`）
+  - 隐藏的模型（`hiddenModels`）
 - 缓存目录：`~/.config/magpie/pareto/cache/`。
 - 所有外部路径和 URL 都能用环境变量覆盖，供 E2E 用：`PARETO_PORT`、`MAGPIE_ADDR`、`PARETO_CONFIG_DIR`（默认 `~/.config/magpie`）、`PARETO_MODELS_JSON`、`PARETO_RAP_URL`、`PARETO_EPOCH_URL`、`PARETO_STATE_DIR`、`PARETO_MAGPIE_ENV`（JSON，写回时传给 magpie CLI 的环境，同 intent-lab）。
 - magpie 可执行文件的查找顺序：`options.magpieBin` → PATH 里的 `magpie` → `/Applications/magpie.app/Contents/MacOS/magpie`。
@@ -104,6 +105,9 @@
 - 图表上方有一排渠道 chip，列出 `/v1/models` 里所有有价格的渠道（显示渠道名和模型数）。点击切换显示/隐藏。默认全部显示，状态存在 state 的 `hiddenProviders`。
   - 隐藏的渠道：它的点、无分数带条目、跨渠道连线都不画；坐标轴范围只按可见点算。
   - `/api/chart` 仍返回完整渠道列表（含隐藏的）供 chip 渲染。
+- 模型也可以隐藏。隐藏粒度是 magpie 模型 id（`provider/model` 里的 model 部分，原样字符串），对所有渠道生效。入口有两处：「名称匹配」表里每行的「隐藏」按钮，以及点/无分数条目的操作面板里的「隐藏这个模型」。
+  - 隐藏的模型：它的点、无分数带条目、跨渠道连线、`unmatched` 列表条目都不出现；坐标轴范围只按可见点算。渠道 chip 的模型数不变（仍是该渠道全部有价模型数）。
+  - `/api/chart` 返回 `hiddenModels[]`（`{model, providers[]}`）供「已隐藏的模型」列表恢复用。状态存在 state 的 `hiddenModels`。
 - 点旁标签是 `渠道/模型`（magpie 风格，例如 `wokey/deepseek-v4.1-flash`）。标签贪心放置：依次尝试点的右、左、上、下；和已放置标签的 bbox 冲突就试下一个位置，都冲突或超出绘图区就不画这个标签（tooltip 里仍能看到）。
 - 路由组只在 hover tooltip 里列出，可以按组筛选。
 - hover 一个点时，它所属模型的整组高亮，其余变暗。tooltip 显示：
@@ -187,14 +191,16 @@ effort 名对齐也走这套流程。magpie 的 effort 有 low、medium、high�
   - `providers[]`：`{id, name, modelCount, hidden}`，包含所有有价格的渠道（含隐藏的）
   - `boardModels[]`：当前榜单的全部模型名（名称匹配的 datalist 用）
   - `unmatched[]`：`{model, providers[]}`，当前榜单下 match 为 null 的 magpie 模型
+  - `hiddenModels[]`：`{model, providers[]}`，已隐藏的模型及其出现的渠道，供恢复用
   - `aliases[]`：`{model, boardModel}`，state 里已有人工映射
   - `boards[]`（含 snapshot 日期）
   - `profiles[]`
   - `cacheDates`
 - `POST /api/refresh`：手动刷新数据源。
-- `GET/POST /api/state/*`：读写用户状态，包括别名覆盖、手动分数、存疑标记、系列修正、LLM 模型、确认或驳回 AI 猜测、`hiddenProviders`。
+- `GET/POST /api/state/*`：读写用户状态，包括别名覆盖、手动分数、存疑标记、系列修正、LLM 模型、确认或驳回 AI 猜测、`hiddenProviders`、`hiddenModels`。
   - `POST /api/state/alias`：body `{model, boardModel}`；`boardModel` 为空表示删除这条人工映射。
   - `POST /api/state/providers`：body `{provider, hidden}`，切换渠道显示/隐藏。
+  - `POST /api/state/hidden-model`：body `{model, hidden}`，切换模型显示/隐藏。`model` 是 magpie 模型 id（`provider/model` 里的 model 部分），对所有渠道生效。
 - `POST /api/subscription/preview`：返回价格 diff。
 - `POST /api/subscription/apply`：执行写回，传 `dryRun` 时只返回命令。
 - `POST /api/group/preview`、`POST /api/group/apply`：同上，对象是路由组。
@@ -224,6 +230,7 @@ effort 名对齐也走这套流程。magpie 的 effort 有 low、medium、high�
     6. 图上没有官方/参照点（`/api/chart` 不再有 `officialPoints`）
     6b. 隐藏一个渠道后，可见点、无分数条目和跨渠道连线里都没有该渠道；渠道列表里仍有它且标为隐藏；重新打开恢复
     6c. 未匹配列表：fixture 里的 `hy4free` 出现在 `unmatched`；调 alias API 映射到榜单模型后它离开列表并有分；删除映射后回到未匹配
+    6d. 隐藏一个有点的模型后，`points`、`noScore`、`links` 里都没有它，`hiddenModels` 列出它及其渠道，渠道 chip 的模型数不变；隐藏一个 `unmatched` 里的模型后它离开列表；恢复后都回来
     7. 系列判定，以及最新一代过滤和旧代例外（构造一个更便宜的旧代应该被保留，构造一个更贵的旧代应该被隐藏）
     8. 匹配优先级：人工 > 模糊 > LLM。LLM 层用假网关返回固定答案，结果标成 AI 猜测；确认后变成人工
     9. 无分数带，以及手动打分后的效果

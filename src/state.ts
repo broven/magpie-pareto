@@ -42,6 +42,7 @@ export interface ParetoState {
   llmRejected: Record<string, boolean>;
   subscriptions: Record<string, Subscription>;
   hiddenProviders: string[];
+  hiddenModels: string[];
 }
 
 export function defaultState(): ParetoState {
@@ -56,6 +57,7 @@ export function defaultState(): ParetoState {
     llmRejected: {},
     subscriptions: {},
     hiddenProviders: [],
+    hiddenModels: [],
   };
 }
 
@@ -75,6 +77,9 @@ export async function readState(paths: Paths = resolvePaths()): Promise<ParetoSt
     subscriptions: isObject(raw.subscriptions) ? raw.subscriptions : {},
     hiddenProviders: Array.isArray(raw.hiddenProviders)
       ? [...new Set(raw.hiddenProviders.map(String).filter(Boolean))]
+      : [],
+    hiddenModels: Array.isArray(raw.hiddenModels)
+      ? [...new Set(raw.hiddenModels.map(String).filter(Boolean))]
       : [],
   };
   return state;

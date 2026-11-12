@@ -449,6 +449,19 @@ function renderPointActions() {
   seriesSection.append(seriesInput, seriesSave);
   menu.append(seriesSection);
 
+  const hideSection = el("div", "section");
+  hideSection.append(el("b", "", "隐藏模型"));
+  const hideButton = el("button", "", `隐藏这个模型：${target.model}（对所有渠道生效）`);
+  hideButton.type = "button";
+  hideButton.dataset.testid = "hidden-model-hide";
+  hideButton.addEventListener("click", async () => {
+    try {
+      await setModelHidden(target.model, true);
+    } catch (error) { setStatus("#warnings", `隐藏失败：${error.message}`, "bad"); }
+  });
+  hideSection.append(hideButton);
+  menu.append(hideSection);
+
   if (state.selected.kind === "point") {
     const groupSection = el("div", "section");
     groupSection.append(el("b", "", "路由组"));
@@ -558,6 +571,7 @@ async function loadChart() {
     renderNoScore(data);
     renderLegend(data);
     renderNameMatching(data);
+    renderHiddenModels(data);
     renderLlmMatches(data);
     renderAttribution(data);
     if (state.selected) {
@@ -662,6 +676,18 @@ function renderNameMatching(data) {
         }
       });
       actionCell.append(save);
+      const hide = el("button", "", "隐藏");
+      hide.type = "button";
+      hide.dataset.testid = "hidden-model-save";
+      hide.addEventListener("click", async () => {
+        try {
+          await setModelHidden(item.model, true);
+          setStatus("#settings-status", `已隐藏 ${item.model}（所有渠道）。`, "good");
+        } catch (error) {
+          setStatus("#settings-status", `隐藏失败：${error.message}`, "bad");
+        }
+      });
+      actionCell.append(hide);
       tr.append(modelCell, el("td", "", (item.providers ?? []).join("、")), inputCell, actionCell);
       table.append(tr);
     }
@@ -693,8 +719,40 @@ function renderNameMatching(data) {
   }
 }
 
-function renderLlmMatches(data) {
-  const box = $("#llm-matches");
+async function setModelHidden(model, hidden) {
+  await api("/api/state/hidden-model", { method: "POST", body: { model, hidden } });
+  state.selected = null;
+  renderPointActions();
+  await loadChart();
+}
+
+function renderHiddenModels(data) {
+  const box = $("#hidden-models");
+  box.replaceChildren();
+  const list = data.hiddenModels ?? [];
+  if (!list.length) return;
+  box.append(el("h3", "", "已隐藏的模型"));
+  for (const item of list) {
+    const row = el("div", "match-row");
+    const providers = item.providers?.length ? item.providers.join("、") : "（当前没有渠道）";
+    row.append(el("code", "", `${item.model} · ${providers}`));
+    const restore = el("button", "", "恢复");
+    restore.type = "button";
+    restore.dataset.testid = "hidden-model-restore";
+    restore.addEventListener("click", async () => {
+      try {
+        await setModelHidden(item.model, false);
+        setStatus("#settings-status", `已恢复 ${item.model}。`, "good");
+      } catch (error) {
+        setStatus("#settings-status", `恢复失败：${error.message}`, "bad");
+      }
+    });
+    row.append(restore);
+    box.append(row);
+  }
+}
+
+function renderLlmMatches(data) {  const box = $("#llm-matches");
   box.replaceChildren();
   const guesses = new Map();
   for (const point of data.points ?? []) {

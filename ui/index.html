@@ -37,6 +37,7 @@
       <h2>价格 × 能力</h2>
       <div id="legend" class="legend"></div>
     </div>
+    <div id="provider-chips" class="provider-chips" data-testid="provider-chips"></div>
     <div id="chart-wrap" class="chart-wrap">
       <svg id="chart" data-testid="chart-svg" viewBox="0 0 1000 560" role="img" aria-label="模型价格与能力散点图"></svg>
       <div id="tooltip" data-testid="chart-tooltip" class="tooltip" hidden></div>
@@ -45,7 +46,7 @@
       <span class="no-score-title">无分数（有价格，但当前榜单没有分；点一下手动打分）</span>
       <div id="no-score-list" class="no-score-list"></div>
     </div>
-    <p class="hint muted">实线：同一模型跨渠道。空心点：官方价参照。虚线描边：存疑。徽标：所在路由组。</p>
+    <p class="hint muted">实线：同一模型跨渠道。点旁文字：渠道/模型。虚线描边：存疑。路由组见悬停提示。</p>
   </section>
 
   <section class="panel" id="point-actions" data-testid="point-actions" hidden>
@@ -81,15 +82,21 @@
     <pre id="sub-commands" class="commands" data-testid="sub-commands" hidden></pre>
   </section>
 
-  <section class="panel" id="settings-panel">
-    <h2>设置与匹配</h2>
+  <section class="panel" id="settings-panel" data-testid="settings-panel">
+    <h2>名称匹配</h2>
+    <p class="muted">下面列出当前榜单下没有匹配到任何榜单模型的 magpie 模型。填上榜单模型名并保存，就会写成人工映射。</p>
+    <div id="unmatched-table" class="table-wrap alias-table" data-testid="unmatched-table"></div>
+    <div id="manual-aliases" data-testid="manual-aliases"></div>
+    <h3>可选：让 LLM 自动猜未匹配的模型</h3>
     <div class="row">
-      <label>LLM 匹配模型或组 <input id="llm-model" data-testid="llm-model" type="text" placeholder="例如 group/light；留空跳过 LLM"></label>
+      <label>LLM 模型或组 <input id="llm-model" data-testid="llm-model" type="text" placeholder="填 magpie 里的模型或路由组，例如 group/light；留空跳过 LLM"></label>
       <button id="llm-save" data-testid="llm-save" type="button">保存</button>
     </div>
     <p id="settings-status" class="muted"></p>
     <div id="llm-matches"></div>
   </section>
+
+  <datalist id="board-model-options"></datalist>
 
   <footer class="foot">
     <p>数据源：real-api-pricing（MIT）· Artificial Analysis（AA 系列榜单）· Epoch AI（CC-BY 4.0）· models.dev</p>

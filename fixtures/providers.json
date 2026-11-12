@@ -24,6 +24,13 @@
       "key": "sk-test-b",
       "chat": "https://chan-b.example/v1",
       "models": ["falcon-9", "mystery-7"]
+    },
+    {
+      "id": "mock-chan",
+      "name": "Mock Chan",
+      "key": "sk-test-mock",
+      "chat": "https://mock-chan.example/v1",
+      "models": ["hy4free"]
     }
   ],
   "groups": [

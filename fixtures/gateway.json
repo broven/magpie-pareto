@@ -115,6 +115,16 @@
       "reasoning_levels": ["high"]
     },
     {
+      "id": "mock-chan/hy4free",
+      "pricing": {
+        "prompt": "0.0000015",
+        "completion": "0.000006",
+        "input_cache_read": "0.00000015",
+        "input_cache_write": "0.0000015"
+      },
+      "reasoning_levels": ["high"]
+    },
+    {
       "id": "group/g1",
       "pricing": { "prompt": "0.000002", "completion": "0.00001" },
       "reasoning_levels": ["high"]

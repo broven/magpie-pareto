@@ -3,6 +3,7 @@ import {
   DataStore,
   officialFor,
   readGroups,
+  readProviderNames,
   readUsageLines,
   type CatalogModel,
   type DataBundle,
@@ -11,7 +12,7 @@ import {
   type Price,
 } from "./datasources";
 import { normalizeModelId, seriesKey } from "./normalize";
-import { buildBoardIndex, boardList, makeLlmClient, matchModel, resolveEntry, scoreForEntry, topScoreForEntry, type BoardIndex, type MatchOutcome } from "./matching";
+import { buildBoardIndex, boardList, makeLlmClient, matchModel, resolveEntry, scoreForEntry, type BoardIndex, type MatchOutcome } from "./matching";
 import { readJson, round } from "./util";
 import { blendPrice, listProfiles, providerAverage, resolveProfile, summarizeUsage, type ProfileInfo, type UsageSummary } from "./usage";
 import { readState, writeState, type AliasEntry, type ParetoState } from "./state";
@@ -44,7 +45,6 @@ export interface ChartPoint {
   oldGen: boolean;
   groups: string[];
   manual: boolean;
-  official: boolean;
   releaseDate: string;
 }
 
@@ -76,9 +76,12 @@ export interface ChartData {
   profile: { id: string; label: string; vector: { input: number; output: number; cache_read: number; cache_write: number } };
   groupFilter: string | null;
   points: ChartPoint[];
-  officialPoints: ChartPoint[];
   noScore: NoScorePoint[];
   links: ChartLink[];
+  providers: Array<{ id: string; name: string; modelCount: number; hidden: boolean }>;
+  boardModels: string[];
+  unmatched: Array<{ model: string; providers: string[] }>;
+  aliases: Array<{ model: string; boardModel: string }>;
   boards: Array<{ id: string; name: string; metric: string; snapshot: string; source: string }>;
   profiles: Array<{ id: string; label: string }>;
   groups: Array<{ id: string; name: string }>;
@@ -212,7 +215,9 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
   const points: ChartPoint[] = [];
   const noScore: NoScorePoint[] = [];
   const summaries = new Map<string, ModelSummary>();
-  const officialSeen = new Map<string, ChartPoint>();
+  const hiddenProviders = new Set(state.hiddenProviders);
+  const providerNames = readProviderNames(paths);
+  const unmatched = new Map<string, Set<string>>();
   const scale = params.scale === "linear" ? "linear" : "log";
 
   const consider = async (gateway: GatewayModel): Promise<void> => {
@@ -221,11 +226,11 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
     const price = priceWithBlend(gateway.pricing, vector);
     const free = gateway.pricing.input === 0 && gateway.pricing.output === 0
       && gateway.pricing.cache_read === 0 && gateway.pricing.cache_write === 0;
-    const official = officialFor(data.catalog, gateway.model);
+    const catalogModel = officialFor(data.catalog, gateway.model);
     const series = state.series[normalizeModelId(gateway.model)]
-      ?? state.series[normalizeModelId(official?.id ?? gateway.model)]
-      ?? seriesKey(gateway.model, official?.family);
-    const releaseDate = official?.releaseDate ?? "";
+      ?? state.series[normalizeModelId(catalogModel?.id ?? gateway.model)]
+      ?? seriesKey(gateway.model, catalogModel?.family);
+    const releaseDate = catalogModel?.releaseDate ?? "";
     const groupIds = groupsFor(gateway.provider, gateway.model, membership);
     let match: MatchOutcome | null = null;
     if (index) {
@@ -235,6 +240,11 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
         llm,
         onLlmCache: () => { llmChanged = true; },
       });
+    }
+    if (index && !match) {
+      const providers = unmatched.get(gateway.model) ?? new Set<string>();
+      providers.add(gateway.provider);
+      unmatched.set(gateway.model, providers);
     }
     const modelId = normalizeModelId(match?.model ?? gateway.model);
     const summaryKey = `${gateway.provider}/${gateway.model}`;
@@ -270,37 +280,8 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
             suspect: adjusted.suspect,
             suspectFactor: adjusted.factor,
             manual: false,
-            official: false,
           });
           made = true;
-        }
-        const top = topScoreForEntry(entry);
-        const officialId = normalizeModelId(official?.id ?? "");
-        if (official?.cost && top) {
-          const officialKey = officialId;
-          const candidate: ChartPoint = {
-            ...base,
-            id: `official::${officialKey}`,
-            modelKey: modelId,
-            series,
-            effort: top.effort,
-            effortKey: top.effortKey,
-            price: priceWithBlend(official.cost, vector),
-            free: false,
-            score: top.score,
-            scoreSource: index.name,
-            harness: top.harness,
-            matchedModel: match.model,
-            match: { kind: match.kind, confirmed: match.confirmed },
-            suspect: false,
-            suspectFactor: 1,
-            manual: false,
-            official: true,
-          };
-          const existing = officialSeen.get(officialKey);
-          // Two magpie ids can map to one official model (a preview alias);
-          // the reference point carries the highest board score for it.
-          if (!existing || candidate.score > existing.score) officialSeen.set(officialKey, candidate);
         }
       }
     }
@@ -320,7 +301,6 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
           suspect: false,
           suspectFactor: 1,
           manual: true,
-          official: false,
         });
       } else {
         noScore.push({
@@ -338,8 +318,8 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
   const keepOf = (provider: string, model: string): boolean => summaries.get(`${provider}/${model}`)?.keep ?? true;
   const oldOf = (provider: string, model: string): boolean => summaries.get(`${provider}/${model}`)?.oldGen ?? false;
 
-  let keptPoints = points.filter(point => keepOf(point.provider, point.model));
-  let keptNoScore = noScore.filter(item => keepOf(item.provider, item.model));
+  let keptPoints = points.filter(point => !hiddenProviders.has(point.provider) && keepOf(point.provider, point.model));
+  let keptNoScore = noScore.filter(item => !hiddenProviders.has(item.provider) && keepOf(item.provider, item.model));
   for (const point of keptPoints) point.oldGen = oldOf(point.provider, point.model);
   for (const item of keptNoScore) item.oldGen = oldOf(item.provider, item.model);
 
@@ -348,12 +328,25 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
     keptNoScore = keptNoScore.filter(item => item.groups.includes(params.group!));
   }
 
-  const officialPoints = [...officialSeen.values()].filter(point => keepOf(point.provider, point.model));
-  const officialKept = officialPoints.filter(point => {
-    // Keep a reference only when at least one channel point of the same model
-    // survived the filters.
-    return keptPoints.some(channel => channel.modelKey === point.modelKey);
-  });
+  const providerCounts = new Map<string, number>();
+  for (const gateway of data.gateway) {
+    if (!gateway.pricing) continue;
+    providerCounts.set(gateway.provider, (providerCounts.get(gateway.provider) ?? 0) + 1);
+  }
+  const providers = [...providerCounts.entries()]
+    .map(([id, modelCount]) => ({ id, name: providerNames.get(id) ?? id, modelCount, hidden: hiddenProviders.has(id) }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  const boardModels = index
+    ? [...new Set([...index.entries.values()].flat().map(entry => entry.canonical))].sort()
+    : [];
+  const unmatchedList = [...unmatched.entries()]
+    .map(([model, list]) => ({ model, providers: [...list].sort() }))
+    .sort((a, b) => a.model.localeCompare(b.model));
+  const userAliases = Object.entries(state.aliases)
+    .filter(([, entry]) => entry && typeof entry === "object" && entry.model)
+    .map(([model, entry]) => ({ model, boardModel: entry.model }))
+    .sort((a, b) => a.model.localeCompare(b.model));
 
   const horizontal = new Map<string, ChartPoint[]>();
   for (const point of keptPoints) {
@@ -363,8 +356,8 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
   }
   const links: ChartLink[] = [];
   for (const list of horizontal.values()) {
-    const providers = new Set(list.map(point => point.provider));
-    if (providers.size < 2) continue;
+    const linkProviders = new Set(list.map(point => point.provider));
+    if (linkProviders.size < 2) continue;
     links.push({
       kind: "horizontal",
       modelKey: list[0].modelKey,
@@ -383,9 +376,12 @@ export async function computeChart(paths: Paths = resolvePaths(), store = new Da
     profile: { id: profile.id, label: profile.label, vector: profile.vector },
     groupFilter: params.group ?? null,
     points: keptPoints,
-    officialPoints: officialKept,
     noScore: keptNoScore,
     links,
+    providers,
+    boardModels,
+    unmatched: unmatchedList,
+    aliases: userAliases,
     boards,
     profiles: listProfiles(usage).map(item => ({ id: item.id, label: item.label })),
     groups: groups.filter(group => !(group.hidden && group.members.length === 0)).map(group => ({ id: group.id, name: group.name })),

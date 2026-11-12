@@ -38,7 +38,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1180, height: 1000 }, colorScheme: "light" });
   await page.goto(stack.base + "/", { waitUntil: "networkidle" });
   await page.waitForFunction(() => document.querySelectorAll("#chart .point").length > 0, undefined, { timeout: 30_000 });
-  await page.locator('#chart .point:not(.official)').first().hover();
+  await page.locator('#chart .point').first().hover();
   await page.waitForFunction(() => {
     const box = document.querySelector("#tooltip");
     return box && !box.hidden && (box.textContent ?? "").length > 0;

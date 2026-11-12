@@ -87,14 +87,13 @@ function renderChart(data) {
   const plotLeft = left + freeWidth, plotRight = W - right, plotTop = top, plotBottom = H - bottom;
   const freeX = left + freeWidth / 2;
   const points = data.points ?? [];
-  const officials = data.officialPoints ?? [];
-  const scored = [...points, ...officials].filter(point => Number.isFinite(point.score));
+  const scored = points.filter(point => Number.isFinite(point.score));
   let yMin = scored.length ? Math.min(...scored.map(point => point.score)) : 0;
   let yMax = scored.length ? Math.max(...scored.map(point => point.score)) : 100;
   if (yMax === yMin) { yMax += 1; yMin = Math.max(0, yMin - 1); }
   const yPad = (yMax - yMin) * 0.1;
   yMin -= yPad; yMax += yPad;
-  const priced = [...points, ...officials].filter(point => !point.free && point.price.blended > 0).map(point => point.price.blended);
+  const priced = points.filter(point => !point.free && point.price.blended > 0).map(point => point.price.blended);
   let xMin = 0.01, xMax = 100;
   if (priced.length) {
     const dataMin = Math.min(...priced), dataMax = Math.max(...priced);
@@ -180,24 +179,30 @@ function renderChart(data) {
     }
   }
 
-  const drawPoint = (point, official) => {
+  const placed = [];
+  const labelQueue = [];
+  const occupyText = node => {
+    try { placed.push(node.getBBox()); } catch { /* keep going without this label */ }
+  };
+
+  const drawPoint = point => {
     const color = colorFor(point.modelKey);
     const px = point.free ? freeX : x(point.price.blended);
     const py = y(point.score);
     const circle = svgEl("circle", {
-      cx: px, cy: py, r: official ? 5.5 : 6.5,
-      fill: official ? "none" : color,
-      "fill-opacity": official ? 0 : 0.92,
+      cx: px, cy: py, r: 6.5,
+      fill: color,
+      "fill-opacity": 0.92,
       stroke: color,
-      "stroke-width": official ? 2 : 1.6,
-      class: `point${official ? " official" : ""}`,
+      "stroke-width": 1.6,
+      class: "point",
       "data-id": point.id,
       "data-model-key": point.modelKey,
     });
-    if (point.suspect && !official) circle.setAttribute("stroke-dasharray", "3 2");
+    if (point.suspect) circle.setAttribute("stroke-dasharray", "3 2");
     circle.addEventListener("mouseenter", event => {
       highlight(point.modelKey);
-      showTooltip(event, point, official);
+      showTooltip(event, point);
     });
     circle.addEventListener("mousemove", event => positionTooltip(event));
     circle.addEventListener("mouseleave", () => {
@@ -206,25 +211,58 @@ function renderChart(data) {
     });
     circle.addEventListener("click", event => {
       event.stopPropagation();
-      if (!official) selectPoint(point);
+      selectPoint(point);
     });
     svg.append(circle);
     if (point.oldGen) {
-      svg.append(svgEl("text", { x: px + 9, y: py - 8, class: "old-label", fill: color }, "旧代"));
+      const node = svgEl("text", { x: px + 9, y: py - 8, class: "old-label", fill: color }, "旧代");
+      svg.append(node);
+      occupyText(node);
     }
     if (point.manual) {
-      svg.append(svgEl("text", { x: px + 9, y: py + 15, class: "manual-label", fill: color }, "手动"));
+      const node = svgEl("text", { x: px + 9, y: py + 15, class: "manual-label", fill: color }, "手动");
+      svg.append(node);
+      occupyText(node);
     }
-    if (point.groups?.length && !official) {
-      const label = point.groups.length > 2
-        ? `${point.groups.slice(0, 2).join("/")} +${point.groups.length - 2}`
-        : point.groups.join("/");
-      svg.append(svgEl("text", { x: px + 9, y: py + (point.manual ? 26 : 14), class: "group-label" }, label));
+    labelQueue.push({ point, px, py, color });
+  };
+
+  const placeLabels = () => {
+    for (const { point, px, py, color } of labelQueue) {
+      const text = `${point.provider}/${point.model}`;
+      const candidates = [
+        { x: px + 9, y: py + 4, anchor: "start" },
+        { x: px - 9, y: py + 4, anchor: "end" },
+        { x: px, y: py - 9, anchor: "middle" },
+        { x: px, y: py + 19, anchor: "middle" },
+      ];
+      for (const candidate of candidates) {
+        const node = svgEl("text", {
+          x: candidate.x,
+          y: candidate.y,
+          "text-anchor": candidate.anchor,
+          class: "point-label",
+          style: `fill:${color}`,
+        }, text);
+        svg.append(node);
+        const box = node.getBBox();
+        const inside = box.width > 0
+          && box.x >= left && box.x + box.width <= plotRight
+          && box.y >= plotTop && box.y + box.height <= plotBottom;
+        const clash = placed.some(other =>
+          box.x < other.x + other.width && other.x < box.x + box.width
+          && box.y < other.y + other.height && other.y < box.y + box.height);
+        if (inside && !clash) {
+          placed.push(box);
+          break;
+        }
+        node.remove();
+      }
     }
   };
 
-  for (const point of points) drawPoint(point, false);
-  for (const point of officials) drawPoint(point, true);
+  for (const point of points) drawPoint(point);
+  placeLabels();
 }
 
 function highlight(modelKey) {
@@ -236,9 +274,9 @@ function highlight(modelKey) {
   }
 }
 
-function tooltipRows(point, official) {
+function tooltipRows(point) {
   const rows = [
-    ["渠道", official ? "官方价参照" : point.provider],
+    ["渠道", point.provider],
     ["模型", point.model],
     ...(point.matchedModel && point.matchedModel !== point.model ? [["榜单模型", point.matchedModel]] : []),
     ["effort", point.effort],
@@ -258,7 +296,7 @@ function tooltipRows(point, official) {
   return rows;
 }
 
-function showTooltip(event, point, official) {
+function showTooltip(event, point) {
   const box = $("#tooltip");
   box.replaceChildren();
   const title = el("div");
@@ -267,7 +305,7 @@ function showTooltip(event, point, official) {
   title.append(dot, el("b", "", `${point.model} · ${point.effort}`));
   box.append(title);
   const table = el("table");
-  for (const [label, value] of tooltipRows(point, official)) {
+  for (const [label, value] of tooltipRows(point)) {
     const tr = el("tr");
     tr.append(el("td", "", label), el("td", "", value));
     table.append(tr);
@@ -516,8 +554,10 @@ async function loadChart() {
     $("#warnings").hidden = warnings.length === 0;
     $("#warnings").textContent = warnings.join("；");
     renderChart(data);
+    renderProviderChips(data);
     renderNoScore(data);
     renderLegend(data);
+    renderNameMatching(data);
     renderLlmMatches(data);
     renderAttribution(data);
     if (state.selected) {
@@ -546,30 +586,144 @@ function renderLegend(data) {
   }
 }
 
+function renderProviderChips(data) {
+  const box = $("#provider-chips");
+  box.replaceChildren();
+  const providers = data.providers ?? [];
+  if (!providers.length) {
+    box.append(el("span", "muted", "没有有价格的渠道。"));
+    return;
+  }
+  box.append(el("span", "muted chip-label", "渠道："));
+  for (const provider of providers) {
+    const chip = el("button", `provider-chip${provider.hidden ? " hidden" : ""}`, `${provider.name || provider.id} · ${provider.modelCount}`);
+    chip.type = "button";
+    chip.dataset.testid = "provider-chip";
+    chip.dataset.provider = provider.id;
+    chip.title = provider.hidden ? `点击显示 ${provider.id}` : `点击隐藏 ${provider.id}`;
+    chip.addEventListener("click", async () => {
+      try {
+        await api("/api/state/providers", { method: "POST", body: { provider: provider.id, hidden: !provider.hidden } });
+        await loadChart();
+      } catch (error) {
+        setStatus("#warnings", `渠道开关失败：${error.message}`, "bad");
+      }
+    });
+    box.append(chip);
+  }
+}
+
+function renderNameMatching(data) {
+  const datalist = $("#board-model-options");
+  datalist.replaceChildren();
+  for (const model of data.boardModels ?? []) {
+    const option = el("option");
+    option.value = model;
+    datalist.append(option);
+  }
+
+  const box = $("#unmatched-table");
+  box.replaceChildren();
+  const unmatched = data.unmatched ?? [];
+  if (!unmatched.length) {
+    box.append(el("p", "muted", "没有未匹配的模型。"));
+  } else {
+    const table = el("table");
+    const head = el("tr");
+    for (const label of ["模型", "出现渠道", "映射到榜单模型", ""]) head.append(el("th", "", label));
+    table.append(head);
+    for (const item of unmatched) {
+      const tr = el("tr");
+      const modelCell = el("td");
+      modelCell.append(el("code", "", item.model));
+      const input = el("input");
+      input.type = "text";
+      input.setAttribute("list", "board-model-options");
+      input.placeholder = "例如 hy4";
+      input.dataset.testid = "alias-input";
+      const inputCell = el("td");
+      inputCell.append(input);
+      const actionCell = el("td");
+      const save = el("button", "", "保存");
+      save.type = "button";
+      save.dataset.testid = "alias-save";
+      save.addEventListener("click", async () => {
+        const boardModel = input.value.trim();
+        if (!boardModel) {
+          setStatus("#settings-status", "先填榜单模型名。", "bad");
+          return;
+        }
+        try {
+          await api("/api/state/alias", { method: "POST", body: { model: item.model, boardModel } });
+          setStatus("#settings-status", `已保存 ${item.model} → ${boardModel}。`, "good");
+          await loadChart();
+        } catch (error) {
+          setStatus("#settings-status", `保存失败：${error.message}`, "bad");
+        }
+      });
+      actionCell.append(save);
+      tr.append(modelCell, el("td", "", (item.providers ?? []).join("、")), inputCell, actionCell);
+      table.append(tr);
+    }
+    box.append(table);
+  }
+
+  const aliasBox = $("#manual-aliases");
+  aliasBox.replaceChildren();
+  const aliases = data.aliases ?? [];
+  if (aliases.length) {
+    aliasBox.append(el("h3", "", "已有人工映射"));
+    for (const alias of aliases) {
+      const row = el("div", "match-row");
+      row.append(el("code", "", `${alias.model} → ${alias.boardModel}`));
+      const remove = el("button", "", "删除");
+      remove.type = "button";
+      remove.dataset.testid = "alias-delete";
+      remove.addEventListener("click", async () => {
+        try {
+          await api("/api/state/alias", { method: "POST", body: { model: alias.model, boardModel: "" } });
+          await loadChart();
+        } catch (error) {
+          setStatus("#settings-status", `删除失败：${error.message}`, "bad");
+        }
+      });
+      row.append(remove);
+      aliasBox.append(row);
+    }
+  }
+}
+
 function renderLlmMatches(data) {
   const box = $("#llm-matches");
   box.replaceChildren();
   const guesses = new Map();
-  for (const point of data.points) {
-    if (point.match?.kind === "llm") guesses.set(`${point.provider}/${point.model}`, point);
+  for (const point of data.points ?? []) {
+    if (point.match?.kind === "llm") {
+      guesses.set(`${point.provider}/${point.model}`, { provider: point.provider, model: point.model, matchedModel: point.matchedModel });
+    }
+  }
+  for (const item of data.noScore ?? []) {
+    if (item.match?.kind === "llm") {
+      guesses.set(`${item.provider}/${item.model}`, { provider: item.provider, model: item.model, matchedModel: item.match.model });
+    }
   }
   if (!guesses.size) return;
   box.append(el("h3", "", "AI 猜测"));
-  for (const [key, point] of guesses) {
+  for (const [key, guess] of guesses) {
     const row = el("div", "match-row");
-    row.append(el("code", "", `${key} → ${point.model}`));
+    row.append(el("code", "", `${key} → ${guess.matchedModel ?? guess.model}`));
     const confirm = el("button", "", "确认");
     confirm.type = "button";
     confirm.dataset.testid = "match-confirm";
     confirm.addEventListener("click", async () => {
-      await api("/api/state/match", { method: "POST", body: { provider: point.provider, model: point.model, board: state.view.board, action: "confirm" } });
+      await api("/api/state/match", { method: "POST", body: { provider: guess.provider, model: guess.model, board: state.view.board, action: "confirm" } });
       await loadChart();
     });
     const reject = el("button", "", "驳回");
     reject.type = "button";
     reject.dataset.testid = "match-reject";
     reject.addEventListener("click", async () => {
-      await api("/api/state/match", { method: "POST", body: { provider: point.provider, model: point.model, board: state.view.board, action: "reject" } });
+      await api("/api/state/match", { method: "POST", body: { provider: guess.provider, model: guess.model, board: state.view.board, action: "reject" } });
       await loadChart();
     });
     row.append(confirm, reject);

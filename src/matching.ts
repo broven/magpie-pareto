@@ -241,18 +241,6 @@ export function scoreForEntry(entry: BoardEntry, reasoningLevels: string[]): Eff
   return best;
 }
 
-// The board's highest score for the model, across every effort and harness.
-// Used for the official-price reference point.
-export function topScoreForEntry(entry: BoardEntry): EffortPoint | null {
-  let best: EffortPoint | null = null;
-  for (const [key, score] of entry.scores) {
-    if (!best || score.score > best.score) {
-      best = { effort: key || "默认", effortKey: key, score: score.score, harness: score.harness };
-    }
-  }
-  return best;
-}
-
 export function resolveEntry(index: BoardIndex, match: MatchOutcome): BoardEntry | null {
   return entryFor(index, match.model);
 }

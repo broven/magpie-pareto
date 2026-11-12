@@ -1,4 +1,17 @@
 {
+  "opencode": {
+    "id": "opencode",
+    "name": "OpenCode",
+    "models": {
+      "falcon-9-free": {
+        "id": "falcon-9-free",
+        "name": "Falcon 9 Free",
+        "family": "falcon",
+        "release_date": "2026-08-01",
+        "cost": { "input": 0, "output": 0, "cache_read": 0, "cache_write": 0 }
+      }
+    }
+  },
   "vanta": {
     "id": "vanta",
     "name": "Vanta",

@@ -474,6 +474,19 @@ export function readGroups(paths: Paths): GroupInfo[] {
   }
 }
 
+export function readProviderNames(paths: Paths): Map<string, string> {
+  const names = new Map<string, string>();
+  try {
+    const raw = JSON.parse(readFileSync(paths.providersFile, "utf8"));
+    for (const provider of Array.isArray(raw?.providers) ? raw.providers : []) {
+      if (!provider || typeof provider !== "object") continue;
+      const id = String(provider.id ?? "");
+      if (id) names.set(id, String(provider.name ?? id));
+    }
+  } catch { /* no provider names: fall back to ids */ }
+  return names;
+}
+
 export function readPluginProviders(path: Paths): Map<string, Set<string>> {
   return readPluginFree(path.pluginProvidersFile);
 }
@@ -500,7 +513,9 @@ export function modelKey(provider: string, model: string): string {
 export function officialFor(catalog: CatalogData, rawModel: string): CatalogModel | null {
   const normalized = normalizeModelId(rawModel);
   const knownVendors = ["deepseek", "zhipuai", "moonshotai", "openai", "anthropic", "alibaba", "xiaomi", "minimax", "google", "xai"];
-  const candidates = catalog.models.filter(model => normalizeModelId(model.id) === normalized && model.cost);
+  // A free channel entry normalizes to the same id (deepseek-v4.1-flash-free
+  // drops the -free marker); its all-zero cost is not an official price.
+  const candidates = catalog.models.filter(model => normalizeModelId(model.id) === normalized && model.cost && !priceIsFree(model.cost));
   if (!candidates.length) return null;
   for (const vendor of knownVendors) {
     const hit = candidates.find(model => model.provider === vendor);

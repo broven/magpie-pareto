@@ -78,7 +78,7 @@ try {
   const providers = new Set(c1.points.map((point: any) => point.provider));
   assert.deepEqual([...providers].sort(), ["chan-a", "chan-b"]);
   assert.ok(c1.points.every((point: any) => !point.model.startsWith("group/") && !point.model.startsWith("auto/")));
-  assert.ok(c1.noScore.every((item: any) => item.provider === "chan-a" || item.provider === "chan-b"));
+  assert.ok(c1.noScore.every((item: any) => ["chan-a", "chan-b", "mock-chan"].includes(item.provider)));
   assert.ok(!c1.points.some((point: any) => point.model === "no-price"));
   assert.equal(c1.boards.length, 10, "8 RAP boards plus ECI and SWE");
   check("1 only /v1/models provider/model entries; group and auto skipped", {
@@ -148,16 +148,64 @@ try {
     horizontal: horizontal.points.length, vertical: c1.links.filter((link: any) => link.kind === "vertical").length,
   });
 
-  // 6: one official hollow point per model, scored at the board's highest value.
-  const official = c1.officialPoints.find((point: any) => point.modelKey === "falcon-9");
-  assert.ok(official, "official falcon-9 reference must exist");
-  assert.equal(official.official, true);
-  assert.equal(official.effort, "max");
-  assert.equal(official.score, 70);
-  assert.equal(c1.officialPoints.filter((point: any) => point.modelKey === "falcon-9").length, 1);
-  const expectedOfficial = 0.1 * 4 + 0.05 * 20 + 0.8 * 0.5 + 0.05 * 4;
-  assert.ok(near(official.price.blended, expectedOfficial), `${official.price.blended} != ${expectedOfficial}`);
-  check("6 one official hollow reference point per model at the top board score", { official: official.price.blended, effort: official.effort });
+  // 6: the chart only draws real (channel, model) points; no official/reference points.
+  assert.ok(!("officialPoints" in c1), "the chart response has no officialPoints field");
+  assert.ok(c1.points.every((point: any) => point.official === undefined && !String(point.id).startsWith("official::")));
+  check("6 chart has no official/reference points", { points: c1.points.length });
+
+  // 6b: hiding a provider removes its points, no-score items and cross-channel
+  // links, while the channel list still lists it as hidden; unhiding restores.
+  const cBeforeHide = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  const chanBBefore = cBeforeHide.providers.find((provider: any) => provider.id === "chan-b");
+  assert.ok(chanBBefore, "the channel list includes chan-b");
+  assert.equal(chanBBefore.hidden, false);
+  assert.equal(chanBBefore.modelCount, 2);
+  assert.ok(cBeforeHide.points.some((point: any) => point.provider === "chan-b"));
+  assert.ok(cBeforeHide.links.some((link: any) => link.modelKey === "falcon-9"));
+  const hiddenState = await post("/api/state/providers", { provider: "chan-b", hidden: true });
+  assert.deepEqual(hiddenState.hiddenProviders, ["chan-b"]);
+  const cHidden = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  assert.ok(!cHidden.points.some((point: any) => point.provider === "chan-b"), "hidden channel draws no points");
+  assert.ok(!cHidden.noScore.some((item: any) => item.provider === "chan-b"), "hidden channel draws no no-score items");
+  assert.ok(!cHidden.links.some((link: any) => link.modelKey === "falcon-9"), "the cross-channel link is gone");
+  const chanBHidden = cHidden.providers.find((provider: any) => provider.id === "chan-b");
+  assert.ok(chanBHidden, "the channel list still includes the hidden channel");
+  assert.equal(chanBHidden.hidden, true);
+  assert.equal(chanBHidden.modelCount, 2);
+  const stateWithHidden = await get("/api/state");
+  assert.deepEqual(stateWithHidden.hiddenProviders, ["chan-b"]);
+  await post("/api/state/providers", { provider: "chan-b", hidden: false });
+  const cRestored = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  assert.ok(cRestored.points.some((point: any) => point.provider === "chan-b"), "unhiding restores the points");
+  assert.ok(cRestored.links.some((link: any) => link.modelKey === "falcon-9"));
+  assert.equal(cRestored.providers.find((provider: any) => provider.id === "chan-b").hidden, false);
+  check("6b hidden channel drops points, no-score items and links; channel list keeps it", {
+    hidden: chanBHidden.hidden, modelCount: chanBHidden.modelCount,
+  });
+
+  // 6c: the name-matching table lists unmatched models; a manual alias scores
+  // the model and leaves the list; deleting the alias puts it back.
+  const unmatchedBefore = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  const hy4free = unmatchedBefore.unmatched.find((item: any) => item.model === "hy4free");
+  assert.ok(hy4free, "hy4free is unmatched");
+  assert.deepEqual(hy4free.providers, ["mock-chan"]);
+  assert.ok(unmatchedBefore.boardModels.includes("falcon-9"), "the board model list feeds the datalist");
+  await post("/api/state/alias", { model: "hy4free", boardModel: "falcon-9" });
+  const mapped = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  assert.ok(!mapped.unmatched.some((item: any) => item.model === "hy4free"), "the alias removes it from the unmatched list");
+  const hyPoint = pointOfModel(mapped, "mock-chan", "hy4free");
+  assert.ok(hyPoint, "the aliased model now scores");
+  assert.equal(hyPoint.match.kind, "manual");
+  assert.equal(hyPoint.score, 65);
+  assert.ok(mapped.aliases.some((alias: any) => alias.model === "hy4free" && alias.boardModel === "falcon-9"));
+  await post("/api/state/alias", { model: "hy4free", boardModel: "" });
+  const unmatchedAgain = await chart({ board: "aa_intelligence_index", profile: "group:g1" });
+  assert.ok(unmatchedAgain.unmatched.some((item: any) => item.model === "hy4free"), "deleting the alias restores the unmatched entry");
+  assert.ok(!pointOfModel(unmatchedAgain, "mock-chan", "hy4free"), "deleting the alias removes the point");
+  assert.ok(!unmatchedAgain.aliases.some((alias: any) => alias.model === "hy4free"));
+  check("6c unmatched list; manual alias scores; alias delete restores", {
+    unmatched: hy4free.providers, aliasedScore: hyPoint.score,
+  });
 
   // 7: series, latest-generation filtering, cheap-old exception, allOld switch.
   const falcon9 = pointOfModel(c1, "chan-a", "falcon-9");

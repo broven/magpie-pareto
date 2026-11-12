@@ -130,15 +130,30 @@ function makeFetch(paths: Paths, store: DataStore, magpieBin: string) {
         const body = await readBody(request);
         const model = String(body?.model ?? "").trim();
         const boardModel = String(body?.boardModel ?? "").trim();
-        if (!model || !boardModel) return failure(400, "model 和 boardModel 都不能为空");
+        if (!model) return failure(400, "model 不能为空");
         const state = await readState(paths);
-        state.aliases[aliasKey(model)] = {
-          model: boardModel,
-          effort: body?.effort == null || body.effort === "" ? null : String(body.effort),
-          source: "user",
-        };
+        if (!boardModel) delete state.aliases[aliasKey(model)];
+        else {
+          state.aliases[aliasKey(model)] = {
+            model: boardModel,
+            effort: body?.effort == null || body.effort === "" ? null : String(body.effort),
+            source: "user",
+          };
+        }
         await writeState(state, paths);
         return json({ ok: true, aliases: state.aliases });
+      }
+      if (method === "POST" && url.pathname === "/api/state/providers") {
+        const body = await readBody(request);
+        const provider = String(body?.provider ?? "").trim();
+        if (!provider) return failure(400, "provider 不能为空");
+        const state = await readState(paths);
+        const hidden = new Set(state.hiddenProviders);
+        if (body?.hidden === true) hidden.add(provider);
+        else hidden.delete(provider);
+        state.hiddenProviders = [...hidden].sort();
+        await writeState(state, paths);
+        return json({ ok: true, hiddenProviders: state.hiddenProviders });
       }
       if (method === "POST" && url.pathname === "/api/state/manual-score") {
         const body = await readBody(request);

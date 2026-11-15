@@ -50,6 +50,17 @@
       "unmetered": false
     },
     {
+      "plan_id": "fake_plan_peak",
+      "plan": "Fake Plan Peak",
+      "model": "claude-sonnet-4.6",
+      "price_usd": 20,
+      "monthly_tokens": 20000000,
+      "list_blended_usd_per_mtok": 2.0,
+      "confidence": "medium",
+      "currency": "USD",
+      "unmetered": false
+    },
+    {
       "plan_id": "fake_plan_mid",
       "plan": "Fake Plan Mid",
       "model": "falcon-9",

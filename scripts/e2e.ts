@@ -432,9 +432,14 @@ try {
   assert.ok(near(planFalcon.discount, 0.1));
   assert.ok(near(planMini.discount, 0.4));
   assert.equal(planFalcon.mode, "plan");
+  // RAP 写 claude-sonnet-4.6，渠道里叫 claude-sonnet-4-6：归一化后对上，命令用渠道里的名字
+  const planDotted = plan.rows.find((row: any) => row.model === "claude-sonnet-4-6");
+  assert.ok(planDotted, "dotted RAP model name matches the dashed channel model");
+  assert.ok(near(planDotted.discount, 0.5));
+  assert.ok(planDotted.command.includes("chan-a/claude-sonnet-4-6 "), planDotted.command);
   check("11 subscription modes usd/tokens/requests/credits and RAP prefill", {
     usd: usdRow.discount, tokens: tokenRow.discount, requests: requestRow.discount, credits: creditRow.discount,
-    planFalcon: planFalcon.discount, planMini: planMini.discount,
+    planFalcon: planFalcon.discount, planMini: planMini.discount, planDotted: planDotted.discount,
   });
 
   // 12: real magpie CLI in the sandbox, then readback; real config untouched.

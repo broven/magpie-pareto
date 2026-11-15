@@ -1,6 +1,7 @@
 import { resolvePaths, type Paths } from "./config";
 import { DataStore, officialFor, readUsageLines, type DataBundle, type Price, type RapPlanPoint } from "./datasources";
 import { resolveMagpieBin, runMagpie, type CommandResult } from "./magpie";
+import { normalizeModelId } from "./normalize";
 import { readState, type ParetoState, type Subscription } from "./state";
 import { blendPrice, blendTokenSums, providerAverage, resolveProfile, summarizeUsage, type ProfileInfo, type TokenSums } from "./usage";
 import { fmtNum, round } from "./util";
@@ -148,8 +149,9 @@ export async function previewSubscription(
       }
     }
     for (const planRow of bucket.rows) {
+      // RAP 的模型名用点（claude-opus-5.5），magpie 渠道里常用横杠（claude-opus-5-5），按归一化后的 id 对
       const channel = providerModels.find(model => model.model === planRow.model)
-        ?? providerModels.find(model => model.model.toLowerCase() === planRow.model.toLowerCase());
+        ?? providerModels.find(model => normalizeModelId(model.model) === normalizeModelId(planRow.model));
       const official = officialPriceFor(data, planRow.model);
       if (!channel) { warnings.push(`渠道 ${input.provider} 里没有套餐模型 ${planRow.model}`); continue; }
       if (!official) { warnings.push(`${planRow.model} 没有官方价，跳过`); continue; }
@@ -159,7 +161,7 @@ export async function previewSubscription(
       const next = newPrices(official, discount);
       rows.push({
         provider: input.provider,
-        model: planRow.model,
+        model: channel.model,
         mode,
         feeUsd,
         quotaUsd,
@@ -168,7 +170,7 @@ export async function previewSubscription(
         official,
         old: { ...channel.pricing!, blended: blendPrice(channel.pricing!, profile.vector) },
         next,
-        command: priceCommand(input.provider, planRow.model, next),
+        command: priceCommand(input.provider, channel.model, next),
       });
     }
     return { provider: input.provider, mode, feeUsd, rows, warnings, commands: rows.map(row => row.command) };
